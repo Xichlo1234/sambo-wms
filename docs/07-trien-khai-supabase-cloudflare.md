@@ -26,7 +26,7 @@ Thời gian thực hiện: khoảng 1–2 giờ. Làm lần lượt từ Bước
 | Tên miền | Đã thêm vào Cloudflare (gói Free) – ví dụ `sambogold.com` |
 | Tài khoản | GitHub (`Xichlo1234`), Supabase, Cloudflare |
 
-> Chỉ có máy Windows? Cài **WSL2 + Ubuntu 24.04** (PowerShell quyền Admin: `wsl --install -d Ubuntu-24.04`) rồi làm các bước trong cửa sổ Ubuntu. Dùng cho thử nghiệm; vận hành chính thức nên dùng máy Ubuntu riêng.
+> Chỉ có máy Windows? Làm **Phụ lục A** (cài Ubuntu trong Windows bằng WSL2) trước, rồi làm các bước dưới đây trong cửa sổ Ubuntu.
 
 ---
 
@@ -195,3 +195,54 @@ bash deploy/package.sh <phiên-bản> && sudo bash deploy/update.sh deploy/dist/
 | Đăng nhập xong bị đẩy ra ngay | Đang mở bằng `http://` trong khi `COOKIE_SECURE=true` – dùng `https://wms...` |
 | Sao lưu báo lỗi phiên bản | `PG_BIN_DIR` phải trỏ tới `pg_dump` cùng/lớn hơn phiên bản Supabase (Bước 4.3) |
 | Trang Cloudflare báo 502 | Dịch vụ chưa chạy: `sudo systemctl status sambo-wms`; Tunnel trỏ đúng `localhost:4000` |
+
+---
+
+## Phụ lục A – Chạy trên máy Windows (WSL2)
+
+Windows 10 (bản 21H2 trở lên) hoặc Windows 11 chạy được Ubuntu bên trong bằng WSL2 – các lệnh trong tài liệu dùng nguyên vẹn.
+
+### A1. Cài Ubuntu
+1. Bấm Start → gõ `PowerShell` → chuột phải **Run as administrator**:
+   ```powershell
+   wsl --install -d Ubuntu-24.04
+   ```
+2. Khởi động lại máy khi được yêu cầu. Sau khi khởi động, cửa sổ Ubuntu tự mở → đặt **username** (chữ thường, không dấu, vd `sambo`) và **mật khẩu** (dùng cho lệnh `sudo`, gõ không hiện ký tự – bình thường).
+   - Nếu báo lỗi *virtualization*: vào BIOS bật **Intel VT-x / AMD-V (SVM)**, hoặc trong Windows bật tính năng *Virtual Machine Platform*.
+3. Lần sau mở Ubuntu: Start → gõ `Ubuntu` → Enter.
+
+### A2. Bật systemd (để hệ thống tự chạy như dịch vụ)
+Trong cửa sổ Ubuntu:
+```bash
+systemctl is-system-running
+```
+Nếu báo lỗi *System has not been booted with systemd*:
+```bash
+printf '[boot]\nsystemd=true\n' | sudo tee /etc/wsl.conf
+```
+Rồi trong PowerShell chạy `wsl --shutdown`, mở lại Ubuntu.
+
+### A3. Làm tiếp Bước 2 → Bước 7 trong cửa sổ Ubuntu
+- Lấy mã nguồn vào thư mục nhà của Ubuntu (`~/sambo-wms`) – **không** để trong `/mnt/c/...` (rất chậm).
+- Bước 5: mở trình duyệt trên Windows vào **http://localhost:4000**.
+- Bước 6: cài `cloudflared` **bên trong Ubuntu** (chạy lệnh Cloudflare đưa cho *Debian 64-bit*), Service vẫn là `localhost:4000`.
+
+### A4. Giữ hệ thống luôn chạy
+WSL tắt khi máy tắt/ngủ hoặc không còn cửa sổ Ubuntu nào. Thiết lập:
+1. **Không cho máy ngủ**: Settings → System → Power → *Sleep* = **Never** (khi cắm điện).
+2. **Không cho WSL tự tắt khi rảnh**: tạo file `C:\Users\<tên-bạn>\.wslconfig` với nội dung:
+   ```ini
+   [wsl2]
+   vmIdleTimeout=-1
+   ```
+3. **Tự khởi động khi đăng nhập Windows**: Start → *Task Scheduler* → **Create Task**:
+   - General: tên `SAMBO WMS`, chọn *Run only when user is logged on*.
+   - Triggers: **At log on**.
+   - Actions: Program `C:\Windows\System32\wsl.exe`, Arguments: `-d Ubuntu-24.04 --exec sleep infinity`
+   - Conditions: bỏ tích *Start the task only if the computer is on AC power*.
+4. Bật **tự đăng nhập Windows** sau khi khởi động lại (hoặc đăng nhập thủ công sau mỗi lần cập nhật Windows).
+5. Đặt lịch cập nhật Windows ngoài giờ làm việc (Settings → Windows Update → *Active hours*).
+
+Kiểm tra sau khi khởi động lại máy và đăng nhập: mở `https://wms.<tên-miền>` từ điện thoại (mạng 4G) – vào được là hệ thống đã tự chạy.
+
+> Máy Windows phù hợp để **chạy thử và giai đoạn đầu**. Khi vận hành chính thức nhiều người dùng, nên chuyển sang mini-PC cài Ubuntu riêng hoặc VPS: chỉ cần cài lại theo Bước 2–7 và trỏ cùng Supabase – **dữ liệu không mất** vì nằm trên Supabase.
