@@ -148,7 +148,7 @@ r.put('/:id/counts', requirePerm('stocktakes.count'), async (req, res) => {
   const d = z.object({
     lines: z.array(z.object({
       id: z.coerce.number().int(),
-      counted_qty: z.union([z.coerce.number().min(0, 'SL thực tế không âm'), z.literal('').transform(() => null), z.null()]),
+      counted_qty: z.union([z.null(), z.literal('').transform(() => null), z.coerce.number().min(0, 'SL thực tế không âm')]),
       reason: zOptStr,
     })),
   }).parse(req.body);

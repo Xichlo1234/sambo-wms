@@ -43,9 +43,10 @@ r.get('/', async (req, res) => {
     tasks.push(prisma.chemicalReceipt.findMany({ where: { code: contains }, take: 3, select: { id: true, code: true } }).then((rows) => { rows.forEach((x) => results.push({ type: 'chem_receipt', label: 'Nhập hóa chất', title: x.code, link: `/chem-receipts/${x.id}` })); }));
   }
   if (can(req, 'chemicals.view') || can(req, 'chemicals.request')) tasks.push(prisma.chemicalIssue.findMany({ where: { OR: [{ code: contains }, { purpose: contains }] }, take: 3, select: { id: true, code: true, purpose: true } }).then((rows) => { rows.forEach((x) => results.push({ type: 'chem_issue', label: 'Xuất hóa chất', title: x.code, subtitle: x.purpose, link: `/chem-issues/${x.id}` })); }));
-  if (can(req, 'purchase.view')) {
-    tasks.push(prisma.purchaseRequest.findMany({ where: { OR: [{ code: contains }, { purpose: contains }] }, take: 4, select: { id: true, code: true, purpose: true } }).then((rows) => { rows.forEach((x) => results.push({ type: 'pr', label: 'Đề nghị mua', title: x.code, subtitle: x.purpose, link: `/purchase-requests/${x.id}` })); }));
-    tasks.push(prisma.purchaseOrder.findMany({ where: { OR: [{ code: contains }, { supplier: { name: contains } }] }, take: 4, select: { id: true, code: true, supplier: { select: { name: true } } } }).then((rows) => { rows.forEach((x) => results.push({ type: 'po', label: 'Đơn đặt hàng', title: x.code, subtitle: x.supplier.name, link: `/purchase-orders/${x.id}` })); }));
+  if (can(req, 'purchase.view') || can(req, 'purchase.request')) {
+    const prScope = can(req, 'purchase.order') || can(req, 'purchase.request_approve') ? {} : { OR: [{ requester_id: req.user!.id }, ...(req.user!.department_id ? [{ department_id: req.user!.department_id }] : [])] };
+    tasks.push(prisma.purchaseRequest.findMany({ where: { AND: [prScope, { OR: [{ code: contains }, { purpose: contains }] }] }, take: 4, select: { id: true, code: true, purpose: true } }).then((rows) => { rows.forEach((x) => results.push({ type: 'pr', label: 'Đề nghị mua', title: x.code, subtitle: x.purpose, link: `/purchase-requests/${x.id}` })); }));
+    if (can(req, 'purchase.view')) tasks.push(prisma.purchaseOrder.findMany({ where: { OR: [{ code: contains }, { supplier: { name: contains } }] }, take: 4, select: { id: true, code: true, supplier: { select: { name: true } } } }).then((rows) => { rows.forEach((x) => results.push({ type: 'po', label: 'Đơn đặt hàng', title: x.code, subtitle: x.supplier.name, link: `/purchase-orders/${x.id}` })); }));
   }
   await Promise.all(tasks);
   ok(res, results);

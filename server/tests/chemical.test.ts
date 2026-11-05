@@ -294,3 +294,19 @@ describe('Đồng thời & toàn vẹn sổ lô', () => {
     expect(admin).toBeTruthy();
   });
 });
+
+describe('Hồi quy: trường để trống không bị ép thành 0 / 1970', () => {
+  it('nhiệt độ bảo quản trống giữ null; ngày giao dự kiến trống giữ null', async () => {
+    const unit = (await prisma.unit.findUniqueOrThrow({ where: { code: 'LIT' } })).id;
+    const c = await khohc.post('/api/chemicals').send({ code: 'HC-NULL', name: 'Kiểm tra null', unit_id: unit, storage_temp_min: null, storage_temp_max: '', default_shelf_life_days: null });
+    expect(c.status, JSON.stringify(c.body)).toBe(200);
+    const row = await prisma.chemical.findUniqueOrThrow({ where: { code: 'HC-NULL' } });
+    expect(row.storage_temp_min).toBeNull();
+    expect(row.storage_temp_max).toBeNull();
+    const r = await khohc.post('/api/chemical-receipts').send({ warehouse_id: wh, doc_date: today(), received_date: today(), ...checks, lines: [{ chemical_id: row.id, location_id: locA1, qty_doc: 1, qty_received: 1, unit_price: null, mfg_date: null, expiry_date: '' }] });
+    expect(r.status, JSON.stringify(r.body)).toBe(200);
+    const line = await prisma.chemicalReceiptItem.findFirstOrThrow({ where: { receipt_id: r.body.data.id } });
+    expect(line.unit_price).toBeNull();
+    expect(line.mfg_date).toBeNull();
+  });
+});

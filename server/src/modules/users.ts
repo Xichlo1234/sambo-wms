@@ -17,7 +17,7 @@ const userSchema = z.object({
   full_name: z.string().trim().min(2, 'Nhập họ tên'),
   email: z.union([z.string().email('Email không hợp lệ'), z.literal('').transform(() => null), z.null()]).optional(),
   phone: zOptStr, position: zOptStr,
-  department_id: z.union([z.coerce.number().int().positive(), z.literal('').transform(() => null), z.null()]).optional(),
+  department_id: z.union([z.null(), z.literal('').transform(() => null), z.coerce.number().int().positive()]).optional(),
   role_ids: z.array(z.coerce.number().int()).min(1, 'Chọn ít nhất 1 vai trò'),
 });
 
@@ -42,7 +42,7 @@ usersRouter.get('/', requirePerm('users.manage'), async (req, res) => {
 });
 
 /** Danh sách rút gọn người dùng đang hoạt động (chọn người nhận, người phụ trách) */
-usersRouter.get('/lookup', requirePerm('issues.issue', 'departments.manage', 'users.manage'), async (req, res) => {
+usersRouter.get('/lookup', requirePerm('issues.issue', 'chemicals.issue', 'departments.manage', 'users.manage'), async (req, res) => {
   const rows = await prisma.user.findMany({
     where: { status: 'ACTIVE', ...(req.query.department_id ? { department_id: Number(req.query.department_id) } : {}) },
     select: { id: true, username: true, full_name: true, department_id: true }, orderBy: { full_name: 'asc' }, take: 1000,

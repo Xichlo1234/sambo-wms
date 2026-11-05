@@ -24,7 +24,7 @@ const schema = z.object({
   client_request_id: z.string().max(64).optional(),
   warehouse_id: z.coerce.number().int().positive('Chọn kho'),
   department_id: z.coerce.number().int().positive('Chọn bộ phận trả'),
-  related_issue_id: z.union([z.coerce.number().int().positive(), z.literal('').transform(() => null), z.null()]).optional(),
+  related_issue_id: z.union([z.null(), z.literal('').transform(() => null), z.coerce.number().int().positive()]).optional(),
   doc_date: z.coerce.date(),
   returned_by_name: z.string().trim().min(2, 'Nhập người trả'),
   reason: z.string().trim().min(3, 'Nhập lý do trả'),

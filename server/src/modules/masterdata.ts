@@ -6,7 +6,7 @@ import { zOptStr } from '../lib/http';
 
 const zCode = z.string().trim().min(1, 'Bắt buộc nhập mã').max(50).transform((s) => s.toUpperCase());
 const zName = z.string().trim().min(1, 'Bắt buộc nhập tên').max(250);
-const zOptInt = z.union([z.coerce.number().int().positive(), z.literal('').transform(() => null), z.null()]).optional();
+const zOptInt = z.union([z.null(), z.literal('').transform(() => null), z.coerce.number().int().positive()]).optional();
 
 export const unitsRouter = crudRouter({
   model: 'unit', entityType: 'unit', viewPerm: ['items.view'], managePerm: 'masterdata.manage',
@@ -45,7 +45,7 @@ export const locationsRouter = crudRouter({
 });
 
 export const departmentsRouter = crudRouter({
-  model: 'department', entityType: 'department', viewPerm: ['departments.view', 'issues.create', 'issues.view_all'], managePerm: 'departments.manage',
+  model: 'department', entityType: 'department', viewPerm: ['departments.view', 'issues.create', 'issues.view_all', 'chemicals.request', 'purchase.request'], managePerm: 'departments.manage',
   createSchema: z.object({
     code: zCode, name: zName, manager_user_id: zOptInt, manager_name: zOptStr, area: zOptStr, description: zOptStr,
   }),

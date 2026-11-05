@@ -94,10 +94,10 @@ export default function App() {
         <Route path="chem-adjustments/new" element={P(['chemicals.adjust'], <ChemAdjustmentForm />)} />
         <Route path="chem-adjustments/:id" element={P(['chemicals.view'], <ChemAdjustmentDetail />)} />
         <Route path="chem-safety" element={P(['chemicals.view'], <ChemSafety />)} />
-        <Route path="purchase-requests" element={P(['purchase.view'], <PrList />)} />
+        <Route path="purchase-requests" element={P(['purchase.view', 'purchase.request'], <PrList />)} />
         <Route path="purchase-requests/new" element={P(['purchase.request'], <PrForm />)} />
         <Route path="purchase-requests/:id/edit" element={P(['purchase.request'], <PrForm />)} />
-        <Route path="purchase-requests/:id" element={P(['purchase.view'], <PrDetail />)} />
+        <Route path="purchase-requests/:id" element={P(['purchase.view', 'purchase.request'], <PrDetail />)} />
         <Route path="quotes" element={P(['purchase.view'], <QuoteList />)} />
         <Route path="quotes/:id" element={P(['purchase.view'], <QuoteRedirect />)} />
         <Route path="purchase-orders" element={P(['purchase.view'], <PoList />)} />

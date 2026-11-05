@@ -24,7 +24,7 @@ export const quotesRouter = Router();
 export const poRouter = Router();
 export const supplierExtraRouter = Router();
 const D = (v: Prisma.Decimal.Value) => new Prisma.Decimal(v);
-const zOptDate = z.union([z.coerce.date(), z.literal('').transform(() => null), z.null()]).optional();
+const zOptDate = z.union([z.null(), z.literal('').transform(() => null), z.coerce.date()]).optional();
 const userNames = async (ids: (number | null | undefined)[]) => prisma.user.findMany({ where: { id: { in: ids.filter(Boolean) as number[] } }, select: { id: true, full_name: true } });
 
 const hidePrices = <T extends Record<string, unknown>>(req: Request, row: T, fields: string[]) => (can(req, 'purchase.view_value') ? row : Object.fromEntries(Object.entries(row).map(([k, v]) => [k, fields.includes(k) ? null : v])) as T);
@@ -76,7 +76,7 @@ prRouter.get('/suggestions', requirePerm('purchase.request'), async (_req, res) 
   ok(res, [...items, ...chemRows.filter((x) => x.suggest_qty > 0)]);
 });
 
-prRouter.get('/', requirePerm('purchase.view'), async (req, res) => {
+prRouter.get('/', requirePerm('purchase.view', 'purchase.request'), async (req, res) => {
   const { page, pageSize, skip, take } = pageArgs(req.query);
   const and: Prisma.PurchaseRequestWhereInput[] = [prScope(req)];
   if (req.query.q) and.push({ OR: [{ code: { contains: String(req.query.q), mode: 'insensitive' } }, { purpose: { contains: String(req.query.q), mode: 'insensitive' } }] });
@@ -91,7 +91,7 @@ prRouter.get('/', requirePerm('purchase.view'), async (req, res) => {
   ok(res, rows, pageMeta(page, pageSize, total));
 });
 
-prRouter.get('/:id', requirePerm('purchase.view'), async (req, res) => {
+prRouter.get('/:id', requirePerm('purchase.view', 'purchase.request'), async (req, res) => {
   const pr = await prisma.purchaseRequest.findFirst({ where: { id: Number(req.params.id), ...prScope(req) }, include: { ...prInclude, quotes: { include: { supplier: { select: { id: true, code: true, name: true } }, lines: true } } } });
   if (!pr) throw notFound('Không tìm thấy đề nghị mua');
   const pos = await prisma.purchaseOrder.findMany({ where: { request_id: pr.id }, select: { id: true, code: true, status: true, supplier: { select: { name: true } } } });
@@ -192,7 +192,7 @@ prRouter.post('/:id/close', requirePerm('purchase.order'), async (req, res) => {
 });
 
 /** So sánh báo giá của đề nghị */
-prRouter.get('/:id/compare', requirePerm('purchase.view'), async (req, res) => {
+prRouter.get('/:id/compare', requirePerm('purchase.view', 'purchase.request'), async (req, res) => {
   const pr = await prisma.purchaseRequest.findUnique({ where: { id: Number(req.params.id) }, include: { lines: { include: { item: { select: { code: true, name: true } }, chemical: { select: { code: true, name: true } } } }, quotes: { include: { supplier: true, lines: true } } } });
   if (!pr) throw notFound();
   const showVal = can(req, 'purchase.view_value');
@@ -252,8 +252,8 @@ quotesRouter.put('/:id', requirePerm('purchase.order'), async (req, res) => {
   const id = Number(req.params.id);
   const d = z.object({
     quote_no: zOptStr, quote_date: z.coerce.date(), valid_until: zOptDate, currency: z.string().trim().min(3, 'Chọn tiền tệ').max(10),
-    delivery_days: z.union([z.coerce.number().int().min(0), z.literal('').transform(() => null), z.null()]).optional(), payment_terms: zOptStr, note: zOptStr,
-    lines: z.array(z.object({ id: z.coerce.number(), unit_price: z.union([z.coerce.number().min(0), z.literal('').transform(() => null), z.null()]) })),
+    delivery_days: z.union([z.null(), z.literal('').transform(() => null), z.coerce.number().int().min(0)]).optional(), payment_terms: zOptStr, note: zOptStr,
+    lines: z.array(z.object({ id: z.coerce.number(), unit_price: z.union([z.null(), z.literal('').transform(() => null), z.coerce.number().min(0)]) })),
   }).parse(req.body);
   const q = await prisma.supplierQuote.findUnique({ where: { id } });
   if (!q) throw notFound();
@@ -280,7 +280,7 @@ const poSchema = z.object({
   request_id: z.union([z.coerce.number().int().positive(), z.null()]).optional(),
   quote_id: z.union([z.coerce.number().int().positive(), z.null()]).optional(),
   order_date: z.coerce.date(), expected_date: zOptDate,
-  currency: z.string().trim().min(3, 'Chọn tiền tệ').max(10), exchange_rate: z.union([z.coerce.number().positive(), z.literal('').transform(() => null), z.null()]).optional(),
+  currency: z.string().trim().min(3, 'Chọn tiền tệ').max(10), exchange_rate: z.union([z.null(), z.literal('').transform(() => null), z.coerce.number().positive()]).optional(),
   payment_terms: zOptStr, delivery_terms: zOptStr, note: zOptStr,
   lines: z.array(z.object({
     pr_item_id: z.union([z.coerce.number().int().positive(), z.null()]).optional(),

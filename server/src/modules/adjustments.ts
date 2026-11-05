@@ -24,7 +24,7 @@ const lineSchema = z.object({
   location_id: z.coerce.number().int().positive('Chọn vị trí'),
   bucket: z.enum(['USABLE', 'QUARANTINE', 'DAMAGED']).default('USABLE'),
   qty_delta: z.coerce.number().refine((v) => v !== 0, 'SL điều chỉnh phải khác 0'),
-  unit_price: z.union([z.coerce.number().min(0), z.literal('').transform(() => null), z.null()]).optional(),
+  unit_price: z.union([z.null(), z.literal('').transform(() => null), z.coerce.number().min(0)]).optional(),
   reason: zOptStr,
 });
 

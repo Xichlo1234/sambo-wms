@@ -23,15 +23,15 @@ import { validatePoLink, applyPoReceipt } from '../services/purchasing';
 
 const r = Router();
 const ENTITY = 'chemical_receipt';
-const zDateOpt = z.union([z.coerce.date(), z.literal('').transform(() => null), z.null()]).optional();
+const zDateOpt = z.union([z.null(), z.literal('').transform(() => null), z.coerce.date()]).optional();
 
 const schema = z.object({
   client_request_id: z.string().max(64).optional(),
   warehouse_id: z.coerce.number().int().positive('Chọn kho hóa chất'),
   doc_date: z.coerce.date(),
   received_date: z.coerce.date(),
-  supplier_id: z.union([z.coerce.number().int().positive(), z.literal('').transform(() => null), z.null()]).optional(),
-  purchase_order_id: z.union([z.coerce.number().int().positive(), z.literal('').transform(() => null), z.null()]).optional(),
+  supplier_id: z.union([z.null(), z.literal('').transform(() => null), z.coerce.number().int().positive()]).optional(),
+  purchase_order_id: z.union([z.null(), z.literal('').transform(() => null), z.coerce.number().int().positive()]).optional(),
   supplier_doc_no: zOptStr, deliverer_name: zOptStr, transport_note: zOptStr, note: zOptStr,
   chk_packaging: z.boolean().default(false), chk_label: z.boolean().default(false), chk_documents: z.boolean().default(false),
   chk_sds: z.boolean().default(false), chk_transport: z.boolean().default(false),
@@ -43,7 +43,7 @@ const schema = z.object({
     qty_doc: z.coerce.number().min(0), qty_received: z.coerce.number().min(0),
     result: z.enum(['PASSED', 'QUARANTINE', 'FAILED']).default('PASSED'),
     packaging_ok: z.boolean().default(true), label_ok: z.boolean().default(true),
-    condition_note: zOptStr, unit_price: z.union([z.coerce.number().min(0), z.literal('').transform(() => null), z.null()]).optional(), note: zOptStr,
+    condition_note: zOptStr, unit_price: z.union([z.null(), z.literal('').transform(() => null), z.coerce.number().min(0)]).optional(), note: zOptStr,
   })).min(1, 'Phải có ít nhất 1 dòng hóa chất'),
 });
 type Body = z.infer<typeof schema>;

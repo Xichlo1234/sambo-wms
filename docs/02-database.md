@@ -35,6 +35,31 @@ Mọi bảng nghiệp vụ có `id`, `created_at`, `updated_at`, `created_by`, `
 
 Công thức: Tồn cuối kỳ = Tồn đầu kỳ + Nhập hợp lệ − Xuất hợp lệ ± Điều chỉnh hợp lệ = Σ(qty_in − qty_out) của sổ cái đến thời điểm cần xem.
 
+## Nhóm kho hóa chất (tách biệt)
+| Bảng | Ghi chú |
+|---|---|
+| chemicals | Hồ sơ hóa chất: định danh (CAS, công thức, nồng độ…), GHS (mảng biểu tượng), câu H/P, bảo quản, nhiệt độ, thông gió, PCCC, PPE, sơ cứu, xử lý tràn đổ, `is_controlled`, `safety_verified_by/at` |
+| chemical_batches | **Lô**: mã lô NSX, mã lô nội bộ (unique), NSX, ngày nhập, HSD, SL nhập/còn, vị trí, `qc_status` (PENDING/PASSED/QUARANTINE/FAILED), bao bì bất thường. CHECK tồn ≥ 0, HSD ≥ NSX |
+| chemical_receipts / _items | Phiếu nhập: 5 cờ kiểm tra tiếp nhận; dòng: lô, NSX, HSD, kết quả (PASSED/QUARANTINE/FAILED), bao bì/nhãn, liên kết dòng PO |
+| chemical_issues / _items | Yêu cầu sử dụng: mục đích, khu vực, người chịu trách nhiệm, HSE xác nhận; dòng: SL yêu cầu/duyệt/xuất + `batch_detail` (lô đã xuất) |
+| chemical_movements | Sổ cái theo lô – **trigger bất biến** |
+| chemical_safety_documents | SDS, tài liệu kỹ thuật, COA, hình bao bì, hướng dẫn sự cố – phiên bản, ngày ban hành, hạn rà soát, xác nhận chuyên môn; SDS mới tự đánh dấu bản cũ "SUPERSEDED" |
+| chemical_storage_requirements | Quy tắc lưu trữ không tương thích theo cặp hóa chất, căn cứ SDS, người xác nhận (chỉ quy tắc đã xác nhận mới cảnh báo) |
+| chemical_inspections | Nhật ký kiểm tra kho: nhiệt độ, độ ẩm, 6 hạng mục, phát hiện, biện pháp |
+| chemical_incidents | Nhật ký sự cố: loại, mức độ, mô tả, biện pháp, đóng sự cố |
+| chemical_stocktakes / _items | Kiểm kê theo **lô**: tồn sổ, thực tế, tình trạng bao bì, giải trình |
+| chemical_adjustments / _items | Điều chỉnh / **tiêu hủy** / theo kiểm kê – theo lô, cần phê duyệt (bổ sung so với danh sách gợi ý để xử lý hóa chất hết hạn) |
+
+## Nhóm mua hàng & nhà cung cấp
+| Bảng | Ghi chú |
+|---|---|
+| purchase_requests / _items | Đề nghị mua; dòng là vật tư HOẶC hóa chất; trạng thái `PurchaseStatus` |
+| supplier_quotes / _items | Yêu cầu báo giá theo NCC, giá phản hồi, tiền tệ, thời gian giao, hiệu lực |
+| purchase_orders / _items | PO: dòng có `qty_ordered`, `qty_received` (cập nhật khi phiếu nhập được duyệt, khóa dòng `FOR UPDATE`, không vượt SL đặt). CHECK mỗi dòng đúng một loại hàng |
+| supplier_evaluations | Điểm 1–5 × 4 tiêu chí, tổng điểm /100, xếp loại A–D, số liệu kỳ (JSON) |
+| supplier_complaints | Khiếu nại NCC & kết quả xử lý (bổ sung để theo dõi "lịch sử khiếu nại") |
+| stock_receipts.purchase_order_id, stock_receipt_items.po_item_id | Liên kết PO ↔ phiếu nhập kho mỏ (migration bổ sung cột, không đổi dữ liệu cũ) |
+
 ## Nhóm kiểm soát
 | Bảng | Mục đích |
 |---|---|
@@ -54,7 +79,8 @@ Công thức: Tồn cuối kỳ = Tồn đầu kỳ + Nhập hợp lệ − Xu�
 - **approval_requests** không tạo bảng riêng: trạng thái chờ duyệt nằm ngay trên chứng từ (`status = SUBMITTED`) + `approval_history`. Tránh trùng lặp dữ liệu và lệch trạng thái giữa 2 nơi. Khi công ty xác nhận duyệt nhiều cấp sẽ bổ sung bảng cấu hình luồng duyệt.
 - **stock_adjustments** dùng chung cho điều chỉnh tay, điều chỉnh kiểm kê và **tồn đầu kỳ** (import) → mọi biến động tồn đều qua phê duyệt & sổ cái.
 - Ba loại tồn (khả dụng / chờ kiểm tra / hư hỏng) là cột trong `inventory_balances` và thuộc tính `bucket` trong sổ cái – đáp ứng yêu cầu "hàng chờ kiểm tra", "chỉ tăng tồn khả dụng khi kiểm tra đạt".
-- Bảng nhóm **hóa chất** và **mua hàng** sẽ được thêm bằng migration mới ở Giai đoạn 4–5 (không sửa bảng đang chạy).
+- Bảng nhóm **hóa chất** và **mua hàng** được thêm bằng migration `20261106000000_chemicals_purchasing` (chỉ thêm bảng/cột, không sửa/xóa dữ liệu đang có).
+- `chemical_receipts` dùng chung enum trạng thái với kho mỏ nhưng nhãn theo nghiệp vụ 6.3: DRAFT = Chờ kiểm tra, SUBMITTED = Chờ phê duyệt, POSTED = Đã nhập kho, REJECTED = Từ chối tiếp nhận; "Không đạt yêu cầu" và "Cách ly" là kết quả ở cấp dòng/lô.
 
 ## Chỉ mục quan trọng
 `stock_movements(item_id, posted_at)`, `(warehouse_id, posted_at)`, `(doc_type, doc_id)`, `(department_id, posted_at)`; `items` GIN trigram trên `search_text`, `code`; chứng từ `(status, doc_date)`; `audit_logs(created_at)`, `(entity_type, entity_id)`.

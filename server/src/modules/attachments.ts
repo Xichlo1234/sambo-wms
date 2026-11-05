@@ -45,7 +45,7 @@ const ENTITY_VIEW: Record<string, { perms: string[]; model: string; postedStatus
   chemical_adjustment: { perms: ['chemicals.view'], model: 'chemicalAdjustment', postedStatuses: ['POSTED'] },
   chemical_incident: { perms: ['chemicals.view'], model: 'chemicalIncident' },
   chemical_inspection: { perms: ['chemicals.view'], model: 'chemicalInspection' },
-  purchase_request: { perms: ['purchase.view'], model: 'purchaseRequest' },
+  purchase_request: { perms: ['purchase.view', 'purchase.request'], model: 'purchaseRequest' },
   supplier_quote: { perms: ['purchase.view'], model: 'supplierQuote' },
   purchase_order: { perms: ['purchase.view'], model: 'purchaseOrder' },
   supplier_complaint: { perms: ['suppliers.view'], model: 'supplierComplaint' },

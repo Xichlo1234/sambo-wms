@@ -193,7 +193,7 @@ chemStocktakesRouter.post('/', requirePerm('chemicals.stocktake'), async (req, r
 
 chemStocktakesRouter.put('/:id/counts', requirePerm('chemicals.stocktake'), async (req, res) => {
   const id = Number(req.params.id);
-  const d = z.object({ lines: z.array(z.object({ id: z.number(), counted_qty: z.union([z.coerce.number().min(0), z.literal('').transform(() => null), z.null()]), packaging_ok: z.boolean().nullable().optional(), packaging_note: zOptStr, reason: zOptStr })) }).parse(req.body);
+  const d = z.object({ lines: z.array(z.object({ id: z.number(), counted_qty: z.union([z.null(), z.literal('').transform(() => null), z.coerce.number().min(0)]), packaging_ok: z.boolean().nullable().optional(), packaging_note: zOptStr, reason: zOptStr })) }).parse(req.body);
   const st = await prisma.chemicalStocktake.findUnique({ where: { id } });
   if (!st) throw notFound();
   if (st.status !== 'COUNTING') throw ruleViolation('Đợt kiểm kê không ở trạng thái kiểm đếm');
@@ -279,7 +279,7 @@ chemInspectionsRouter.get('/', requirePerm('chemicals.view'), async (req, res) =
 chemInspectionsRouter.post('/', requirePerm('chemicals.inspection'), async (req, res) => {
   const d = z.object({
     warehouse_id: z.coerce.number().int().positive(), inspected_at: z.coerce.date(),
-    temperature: z.union([z.coerce.number(), z.literal('').transform(() => null), z.null()]).optional(), humidity: z.union([z.coerce.number().min(0).max(100), z.literal('').transform(() => null), z.null()]).optional(),
+    temperature: z.union([z.null(), z.literal('').transform(() => null), z.coerce.number()]).optional(), humidity: z.union([z.null(), z.literal('').transform(() => null), z.coerce.number().min(0).max(100)]).optional(),
     ventilation_ok: z.boolean(), fire_equipment_ok: z.boolean(), spill_kit_ok: z.boolean(), labeling_ok: z.boolean(), segregation_ok: z.boolean(), ppe_ok: z.boolean(),
     findings: zOptStr, actions: zOptStr,
   }).parse(req.body);

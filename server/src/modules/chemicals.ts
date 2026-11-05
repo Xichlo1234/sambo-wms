@@ -20,8 +20,8 @@ export const chemicalsRouter = Router();
 export const batchesRouter = Router();
 export const chemSafetyRouter = Router();
 
-const zOptInt = z.union([z.coerce.number().int().positive(), z.literal('').transform(() => null), z.null()]).optional();
-const zOptDec = z.union([z.coerce.number(), z.literal('').transform(() => null), z.null()]).optional();
+const zOptInt = z.union([z.null(), z.literal('').transform(() => null), z.coerce.number().int().positive()]).optional();
+const zOptDec = z.union([z.null(), z.literal('').transform(() => null), z.coerce.number()]).optional();
 const GHS = ['GHS01', 'GHS02', 'GHS03', 'GHS04', 'GHS05', 'GHS06', 'GHS07', 'GHS08', 'GHS09'];
 
 const chemicalSchema = z.object({
@@ -36,7 +36,7 @@ const chemicalSchema = z.object({
   hazard_statements: zOptStr, precautionary_statements: zOptStr, storage_conditions: zOptStr,
   storage_temp_min: zOptDec, storage_temp_max: zOptDec, ventilation_req: zOptStr, fire_req: zOptStr, ppe_req: zOptStr,
   first_aid: zOptStr, spill_response: zOptStr,
-  default_shelf_life_days: z.union([z.coerce.number().int().positive(), z.literal('').transform(() => null), z.null()]).optional(),
+  default_shelf_life_days: z.union([z.null(), z.literal('').transform(() => null), z.coerce.number().int().positive()]).optional(),
   is_controlled: z.boolean().default(false), min_stock: z.coerce.number().min(0).default(0), safety_notes: zOptStr, note: zOptStr,
 }).refine((d) => d.storage_temp_min == null || d.storage_temp_max == null || d.storage_temp_max >= d.storage_temp_min, { message: 'Nhiệt độ tối đa phải ≥ tối thiểu', path: ['storage_temp_max'] });
 

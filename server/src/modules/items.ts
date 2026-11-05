@@ -11,8 +11,8 @@ import { getAvailability } from '../services/inventory';
 
 const r = Router();
 
-const zOptInt = z.union([z.coerce.number().int().positive(), z.literal('').transform(() => null), z.null()]).optional();
-const zOptNum = z.union([z.coerce.number().min(0, 'Không được âm'), z.literal('').transform(() => null), z.null()]).optional();
+const zOptInt = z.union([z.null(), z.literal('').transform(() => null), z.coerce.number().int().positive()]).optional();
+const zOptNum = z.union([z.null(), z.literal('').transform(() => null), z.coerce.number().min(0, 'Không được âm')]).optional();
 
 export const itemSchema = z
   .object({

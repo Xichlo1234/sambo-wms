@@ -1,8 +1,17 @@
 # 01 – Phân tích nghiệp vụ & thiết kế (Giai đoạn 1)
 
-## 1. Phạm vi đã triển khai trong bản này
-Giai đoạn 1–3 (+ một phần giai đoạn 6): nền tảng, phân quyền, toàn bộ phân hệ **Kho mỏ 5.1**, nhà cung cấp & bộ phận (hồ sơ cơ bản), báo cáo kho mỏ, import Excel, sao lưu/khôi phục, nhật ký, hướng dẫn vận hành.
-Kho hóa chất (5.2) và Mua hàng (VII) được thiết kế để bổ sung bằng migration mới, dùng chung người dùng, NCC, bộ phận, đính kèm, phê duyệt, nhật ký, báo cáo.
+## 1. Phạm vi đã triển khai (v1.1)
+Giai đoạn 1–6: nền tảng, phân quyền, **Kho mỏ**, **Kho hóa chất** (phân hệ riêng, theo lô), **Mua hàng & Nhà cung cấp**, 26 báo cáo, import Excel, sao lưu/khôi phục, nhật ký, hướng dẫn vận hành. Ba phân hệ dùng chung người dùng, NCC, bộ phận, đính kèm, nhật ký, báo cáo, nhưng **tách biệt quy trình và dữ liệu nghiệp vụ**: kho hóa chất có bảng lô, sổ cái lô, chứng từ và kho (type CHEMICAL) riêng – không dùng chung chứng từ/tồn của kho vật tư.
+
+### Nguyên tắc riêng của kho hóa chất
+- Tồn kho luôn theo **lô**; mỗi dòng nhập tạo một lô có mã nội bộ duy nhất – không gộp lô khác HSD.
+- Nhập kho: 5 bước kiểm tra tiếp nhận bắt buộc + chính sách cấu hình (mã lô, HSD, NSX, SDS hiệu lực, thông tin an toàn đã xác nhận). Hóa chất đã hết hạn không được nhập "Đạt".
+- Kết quả dòng: Đạt (lô được xuất) / Cách ly (lô bị chặn) / Không đạt yêu cầu (không nhập). Từ chối tiếp nhận toàn bộ.
+- Xuất: chặn lô hết hạn, cách ly, không đạt, chưa kiểm tra, hóa chất thiếu/quá hạn SDS; FEFO bắt buộc (cấu hình); hóa chất kiểm soát đặc biệt phải có HSE xác nhận trên từng phiếu; **không có nút bỏ qua cảnh báo an toàn**.
+- Thông tin an toàn chỉ do người dùng nhập theo SDS; sửa trường an toàn → hủy xác nhận, HSE xác nhận lại. Cảnh báo lưu trữ không tương thích chỉ dựa trên quy tắc đã được chuyên gia xác nhận; hệ thống không tự đề xuất ghép nhóm hay quy trình xử lý sự cố.
+
+### Mua hàng
+Đề nghị mua (gợi ý từ tồn thấp, không tự đặt hàng) → duyệt → yêu cầu báo giá nhiều NCC → so sánh → PO (từ báo giá hoặc trực tiếp) → duyệt (người khác) → gửi NCC → phiếu nhập kho mỏ/hóa chất liên kết dòng PO (chặn nhận vượt SL đặt, sai NCC, sai mặt hàng) → PO tự chuyển Giao một phần / Đã giao đủ → đóng đơn. Số báo giá tối thiểu trước khi lập PO là tham số cấu hình (mặc định 0 – chờ công ty xác nhận).
 
 ## 2. Vai trò & nguyên tắc kiểm soát
 9 vai trò mặc định (Super Admin, Warehouse Manager, Warehouse Officer, Procurement Officer, Department User, Chemical Store Officer, HSE Officer, Accountant, Director) – quyền chi tiết có thể chỉnh trong màn hình Phân quyền (52 quyền, nhóm theo chức năng: xem / tạo / sửa / hủy / duyệt / xuất báo cáo / xem giá trị / dữ liệu nhạy cảm).
@@ -71,8 +80,8 @@ Hàng trả lại: `DRAFT → SUBMITTED → INSPECTED (phân loại dùng đư�
 | 5 | Định mức cấp phát theo bộ phận/tháng | Hiện có định mức theo mặt hàng/phiếu (cảnh báo + bắt buộc lý do) |
 | 6 | Hệ thống mã vật tư hiện tại (cấu trúc mã), danh mục nhóm/phân nhóm chuẩn | Seed 9 nhóm theo phạm vi 5.1, sửa được |
 | 7 | Có cho phép ghi sổ khi đang kiểm kê không (đóng băng khu vực) | Cho phép, nhưng cảnh báo số giao dịch phát sinh sau chốt sổ |
-| 8 | Chính sách hóa chất: thông tin bắt buộc khi nhập, danh mục kiểm soát đặc biệt, quy định tương thích lưu trữ | Chờ cung cấp trước Giai đoạn 4 |
-| 9 | Quy trình mua hàng & phê duyệt tài chính (ngưỡng giá trị) | Chờ cung cấp trước Giai đoạn 5 |
+| 8 | Chính sách hóa chất: thông tin bắt buộc khi nhập, danh mục kiểm soát đặc biệt, quy tắc tương thích lưu trữ, mốc cảnh báo HSD | Đã có cấu hình (mặc định: bắt buộc lô, HSD, SDS; FEFO; 30/60/90 ngày) – công ty xác nhận/điều chỉnh tại Cấu hình |
+| 9 | Quy trình mua hàng & phê duyệt tài chính: ngưỡng giá trị theo cấp duyệt, số báo giá tối thiểu, tiêu chí & trọng số đánh giá NCC | Hiện: 1 cấp duyệt PR, 1 cấp duyệt PO (Director), trọng số đánh giá 35/30/20/15 – cần công ty xác nhận |
 | 10 | Thời gian lưu giữ nhật ký, số bản sao lưu, nơi lưu ngoài site | Mặc định giữ 30 bản tự động, nhật ký lưu vĩnh viễn |
 
 ## 7. Những điều chỉnh so với danh sách bảng gợi ý (có lý do)

@@ -47,7 +47,7 @@ const NAV: NavGroup[] = [
   },
   {
     title: 'Mua hàng', items: [
-      { to: '/purchase-requests', label: 'Đề nghị mua hàng', icon: <ClipboardList size={17} />, perm: ['purchase.view'] },
+      { to: '/purchase-requests', label: 'Đề nghị mua hàng', icon: <ClipboardList size={17} />, perm: ['purchase.view', 'purchase.request'] },
       { to: '/quotes', label: 'Yêu cầu báo giá', icon: <FileQuestion size={17} />, perm: ['purchase.view'] },
       { to: '/purchase-orders', label: 'Đơn đặt hàng', icon: <ShoppingCart size={17} />, perm: ['purchase.view'] },
       { to: '/po-tracking', label: 'Theo dõi giao hàng', icon: <PackageCheck size={17} />, perm: ['purchase.view'] },

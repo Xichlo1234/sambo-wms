@@ -1,6 +1,6 @@
 {
   "name": "sambo-wms-server",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "description": "SAMBO GOLD - Warehouse Management System - Backend API",
   "type": "commonjs",

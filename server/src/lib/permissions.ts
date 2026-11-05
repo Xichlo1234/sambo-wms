@@ -125,7 +125,7 @@ export const DEFAULT_ROLES: { code: string; name: string; description: string; p
   {
     code: 'DEPARTMENT_USER', name: 'Department User', description: 'Tạo yêu cầu cấp vật tư/hóa chất, xem lịch sử bộ phận',
     permissions: ['dashboard.view', 'items.view', 'stock.view', 'issues.view', 'issues.create', 'issues.confirm', 'returns.view', 'returns.create',
-      'chemicals.view', 'chemicals.request', 'purchase.view', 'purchase.request'],
+      'chemicals.request', 'purchase.request'],
   },
   {
     code: 'CHEMICAL_STORE_OFFICER', name: 'Chemical Store Officer', description: 'Quản lý kho hóa chất (phân hệ 5.2)',

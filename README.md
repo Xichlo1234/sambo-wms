@@ -18,10 +18,10 @@ Hệ thống quản lý kho vật tư, thiết bị, mua hàng, nhà cung cấp 
 | 1 | Phân tích, thiết kế, database, các điểm cần xác nhận | ✅ `docs/01`, `docs/02` |
 | 2 | Nền tảng: đăng nhập, phân quyền, dashboard, nhật ký, cấu hình | ✅ |
 | 3 | Kho mỏ: danh mục, nhập, xuất, tồn, thẻ kho, kiểm kê, điều chuyển, trả lại, điều chỉnh, báo cáo | ✅ |
-| 6 (một phần) | Import Excel, sao lưu/khôi phục, thông báo, mẫu biểu in, hướng dẫn vận hành | ✅ |
-| 4 | Kho hóa chất (lô/batch, FEFO, SDS/MSDS, an toàn) | ⏳ tiếp theo |
-| 5 | Mua hàng & đánh giá nhà cung cấp (PR, RFQ, PO, theo dõi giao hàng) | ⏳ |
-| 7 | Kiểm thử nghiệm thu với dữ liệu thật, đào tạo, vận hành | ⏳ |
+| 4 | **Kho hóa chất** – phân hệ riêng: lô/batch, HSD, FEFO, SDS/MSDS, GHS, kiểm soát đặc biệt (HSE xác nhận), cách ly, kiểm kê theo lô, tiêu hủy, nhật ký kiểm tra & sự cố | ✅ v1.1 |
+| 5 | **Mua hàng & NCC** – Đề nghị mua → Yêu cầu báo giá/so sánh → PO → Phiếu nhập (mỏ & hóa chất), theo dõi giao hàng, hồ sơ – đánh giá – so sánh – khiếu nại NCC | ✅ v1.1 |
+| 6 | Import Excel (vật tư, tồn đầu kỳ, hóa chất, NCC, bộ phận), sao lưu/khôi phục, thông báo, mẫu biểu in, 26 báo cáo, hướng dẫn vận hành | ✅ |
+| 7 | Nghiệm thu với dữ liệu thật, đào tạo người dùng, vận hành | ⏳ cần công ty phối hợp |
 
 ## Chạy nhanh (môi trường phát triển)
 
@@ -36,20 +36,20 @@ npm run dev                          # API tại http://localhost:4000
 cd client && npm install && npm run dev   # http://localhost:5173
 ```
 
-Tài khoản: `admin` / mật khẩu in ra khi seed (mặc định `Admin@2026`, bắt buộc đổi). Dữ liệu demo (chỉ môi trường đào tạo): `thukho`, `quanlykho`, `baotri`, `khaithac`, `ketoan`, `giamdoc`… mật khẩu `Demo@2026`.
+Tài khoản: `admin` / mật khẩu in ra khi seed (mặc định `Admin@2026`, bắt buộc đổi). Dữ liệu demo (chỉ môi trường đào tạo): `thukho`, `quanlykho`, `baotri`, `khaithac`, `ketoan`, `giamdoc`, `muahang`, `khohc` (kho hóa chất), `hse`, `nhamay`… mật khẩu `Demo@2026`.
 
 ## Kiểm thử
 
 ```bash
-cd server && npm test     # tạo DB kiểm thử tạm riêng, chạy 21 kịch bản nghiệp vụ, rồi xóa DB tạm
+cd server && npm test     # tạo DB kiểm thử tạm riêng, chạy 38 kịch bản nghiệp vụ (kho mỏ, hóa chất, mua hàng), rồi xóa DB tạm
 ```
 
 ## Triển khai & cập nhật
 
 Xem `docs/04-cai-dat-trien-khai.md`. Tóm tắt:
-- Đóng gói: `bash deploy/package.sh 1.0.1`
-- Cài lần đầu: `sudo bash deploy/install.sh sambo-wms-1.0.1.tar.gz`
-- Cập nhật (không ghi đè dữ liệu, tự sao lưu, tự quay lui nếu lỗi): `sudo bash deploy/update.sh sambo-wms-1.0.2.tar.gz`
+- Đóng gói: `bash deploy/package.sh 1.1.0`
+- Cài lần đầu: `sudo bash deploy/install.sh sambo-wms-1.1.0.tar.gz`
+- Cập nhật (không ghi đè dữ liệu, tự sao lưu, tự quay lui nếu lỗi): `sudo bash deploy/update.sh sambo-wms-1.1.0.tar.gz` – từ 1.0 lên 1.1: tự áp migration thêm bảng hóa chất & mua hàng, tự cấp quyền module mới cho vai trò mặc định, giữ nguyên quyền đã tùy chỉnh
 - Docker: `cd deploy && cp .env.docker.example .env && docker compose up -d --build`
 
 ## Cấu trúc thư mục

@@ -135,7 +135,7 @@ export default function Dashboard() {
                 </>}
               </div>
             </Card>
-            <Card title="Nhập – xuất 30 ngày gần nhất (khả dụng)" className="lg:col-span-2">
+            <Card title="Kho mỏ – nhập / xuất 30 ngày gần nhất (tồn khả dụng)" className="lg:col-span-2">
               {data.trend.length === 0 ? <div className="py-16 text-center text-sm text-slate-400">Chưa có giao dịch</div> : (
                 <ResponsiveContainer width="100%" height={260}>
                   <BarChart data={data.trend}>

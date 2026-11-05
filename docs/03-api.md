@@ -37,6 +37,27 @@
 
 Mọi body tạo chứng từ nhận `client_request_id` (UUID) để chống tạo trùng.
 
+## Kho hóa chất
+| Path | Hành động |
+|---|---|
+| /chemicals | `GET, POST, PUT /:id, PATCH /:id/status`, `GET /lookup` (kèm tồn được phép xuất, trạng thái SDS), `POST /:id/verify-safety` [chemicals.safety_verify], `POST /:id/documents` (multipart: doc_type, title, version, issue_date, review_date, file), `POST /documents/:docId/verify` |
+| /chemical-batches | `GET` (lọc q, batch_no, chemical_id, supplier_id, location_id, expiry_from/to, alert = expired/exp1/exp2/exp3/long/abnormal/quarantine/pending), `GET /:id` (thẻ kho theo lô), `PATCH /:id/status {qc_status, note}`, `PATCH /:id/abnormal`, `GET /summary/by-chemical`, `GET /summary/alerts` |
+| /chemical-receipts | `GET, POST, PUT /:id, /submit, /approve, /return {reason}, /refuse {reason}, /cancel` |
+| /chemical-issues | `GET, POST, PUT /:id, /submit, /approve {lines}, /hse-confirm {note}, /reject, GET /:id/allocation (gợi ý FEFO), /issue {receiver_name, lines:[{id, allocations:[{batch_id, qty}]}]}, /confirm {signature}, /cancel` |
+| /chemical-stocktakes | `GET, POST (tạo & chốt tồn theo lô), PUT /:id/counts, /submit, /approve, /reject, /cancel` |
+| /chemical-adjustments | `GET, POST {adj_type: ADJUSTMENT|DISPOSAL, disposal_method, lines:[{batch_id, qty_delta}]}, /submit, /approve, /reject, /cancel` |
+| /chemical-safety/storage-rules | `GET, POST, POST /:id/verify, PATCH /:id/status` |
+| /chemical-inspections, /chemical-incidents | `GET, POST`; sự cố: `POST /:id/close` |
+
+## Mua hàng & nhà cung cấp
+| Path | Hành động |
+|---|---|
+| /purchase-requests | `GET, POST, PUT /:id, /submit, /approve, /reject, /cancel, /close`, `GET /suggestions` (tồn dưới tối thiểu), `GET /:id/compare` (so sánh báo giá) |
+| /quotes | `GET`, `POST {request_id, supplier_ids[]}`, `GET /:id`, `PUT /:id` (nhập giá), `POST /:id/reject` |
+| /purchase-orders | `GET (receivable, late, kind, supplier_id…)`, `POST, PUT /:id, /submit, /approve, /reject, /send, /close, /cancel` |
+| /receipts, /chemical-receipts | nhận thêm `purchase_order_id` và `lines[].po_item_id` |
+| /suppliers/:id/profile, /suppliers/compare?item_id|chemical_id, /suppliers/need-evaluation, POST /suppliers/:id/evaluations, POST /suppliers/:id/complaints, POST /suppliers/complaints/:cid/resolve | Hồ sơ, so sánh, đánh giá, khiếu nại |
+
 ## Tồn kho & báo cáo
 | Path | Mô tả |
 |---|---|
@@ -45,9 +66,9 @@ Mọi body tạo chứng từ nhận `client_request_id` (UUID) để chống t�
 | GET /stock/locations | Tồn theo vị trí của 1 mặt hàng + SL giữ chỗ |
 | GET /stock/reconcile | Đối chiếu số dư ↔ sổ cái |
 | GET /reports | Danh mục báo cáo |
-| GET /reports/:key | Dữ liệu báo cáo (receipts, issues, nxt, stock-current, stock-asof, below-min, no-movement, consumption-dept, transactions, stocktake-variance, damaged-returns, stock-card) |
+| GET /reports/:key | Kho mỏ: receipts, issues, nxt, stock-current, stock-asof, below-min, no-movement, consumption-dept, transactions, stocktake-variance, damaged-returns, stock-card · Hóa chất: chem-stock, chem-batches, chem-nxt, chem-expiring, chem-expired, chem-by-supplier, chem-consumption, chem-quarantine, chem-stocktake, chem-sds · Mua hàng: pr-report, po-report, po-delivery, purchase-by-supplier, supplier-evaluation |
 | GET /reports/:key/export?format=xlsx\|pdf | Xuất file [reports.export] |
-| GET /print/:type/:id | Mẫu biểu PDF: receipt, issue, stocktake, transfer, return, adjustment |
+| GET /print/:type/:id | Mẫu biểu PDF: receipt, issue, stocktake, transfer, return, adjustment, chem-receipt, chem-issue, chem-stocktake, chem-adjustment, po |
 | GET /dashboard?from&to | Chỉ số tổng hợp |
 | GET /search?q= | Tìm kiếm toàn hệ thống theo quyền |
 
@@ -60,6 +81,6 @@ Mọi body tạo chứng từ nhận `client_request_id` (UUID) để chống t�
 | /audit-logs | [audit.view] |
 | /notifications, /notifications/read | Thông báo của người dùng |
 | /attachments `GET ?entity_type&entity_id`, `POST` (multipart `files`, `entity_type`, `entity_id`, `category`), `GET /:id/download`, `DELETE /:id` | PDF/XLSX/DOCX/JPG/PNG, kiểm tra magic bytes, giới hạn dung lượng |
-| /import/templates/:type, /import/:type/preview, /import/:type/error-report, /import/:type/commit, /import/history | type = items, opening_stock, suppliers, departments |
+| /import/templates/:type, /import/:type/preview, /import/:type/error-report, /import/:type/commit, /import/history | type = items, opening_stock, chemicals, suppliers, departments |
 | /backups `GET, POST`, `/:id/verify`, `/:id/download`, `/:id/restore {confirm:"KHOI PHUC"}` | [backup.manage] |
 | GET /health | Kiểm tra sức khỏe (không cần đăng nhập) |

@@ -39,6 +39,9 @@ import { prRouter, quotesRouter, poRouter, supplierExtraRouter } from './modules
   return this.toNumber();
 };
 
+// Phiên bản: biến môi trường APP_VERSION hoặc file VERSION do deploy/package.sh tạo
+const APP_VERSION = process.env.APP_VERSION || [path.resolve(__dirname, '../../VERSION'), path.resolve(process.cwd(), '../VERSION')].map((f) => (fs.existsSync(f) ? fs.readFileSync(f, 'utf8').trim() : '')).find(Boolean) || 'dev';
+
 export function createApp() {
   const app = express();
   app.set('trust proxy', 1); // sau Nginx / Cloudflare Tunnel
@@ -75,7 +78,7 @@ export function createApp() {
 
   app.get('/api/health', async (_req, res) => {
     await prisma.$queryRaw`SELECT 1`;
-    res.json({ success: true, data: { status: 'ok', time: new Date().toISOString(), version: process.env.APP_VERSION || 'dev' } });
+    res.json({ success: true, data: { status: 'ok', time: new Date().toISOString(), version: APP_VERSION } });
   });
 
   app.use('/api/auth', authRouter);
