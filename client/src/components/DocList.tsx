@@ -13,7 +13,7 @@ export function DocList<T extends { id: number }>({ title, subtitle, endpoint, b
 }) {
   const nav = useNavigate();
   const [sp, setSp] = useSearchParams();
-  const [q, setQ] = useState('');
+  const [q, setQ] = useState(sp.get('q') ?? '');
   const [status, setStatus] = useState(sp.get('status') ?? '');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');

@@ -1,0 +1,19 @@
+[Unit]
+Description=SAMBO GOLD Warehouse Management System
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=wms
+WorkingDirectory=/opt/sambo-wms/current/server
+EnvironmentFile=/opt/sambo-wms/shared/.env
+ExecStart=/usr/bin/node dist/index.js
+Restart=always
+RestartSec=5
+# Bảo mật
+NoNewPrivileges=true
+ProtectSystem=full
+ReadWritePaths=/var/lib/sambo-wms
+
+[Install]
+WantedBy=multi-user.target

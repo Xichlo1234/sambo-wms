@@ -1,0 +1,10 @@
+# Cloudflare Tunnel cài trực tiếp trên máy chủ (không dùng Docker):
+#   cloudflared tunnel login && cloudflared tunnel create sambo-wms
+#   cloudflared tunnel route dns sambo-wms wms.<ten-mien-cong-ty>
+#   copy file này vào /etc/cloudflared/config.yml rồi: cloudflared service install
+tunnel: sambo-wms
+credentials-file: /etc/cloudflared/<TUNNEL_ID>.json
+ingress:
+  - hostname: wms.example.com
+    service: http://localhost:4000
+  - service: http_status:404

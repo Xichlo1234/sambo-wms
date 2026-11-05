@@ -12,7 +12,7 @@
     "migrate:dev": "prisma migrate dev",
     "migrate:deploy": "prisma migrate deploy",
     "seed": "tsx prisma/seed.ts",
-    "seed:prod": "node dist-seed/seed.js",
+    "seed:prod": "tsx prisma/seed.ts",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
@@ -32,6 +32,8 @@
     "multer": "^2.0.2",
     "node-cron": "^4.2.1",
     "pdfmake": "^0.2.20",
+    "prisma": "6.19.0",
+    "tsx": "4.20.6",
     "zod": "^3.25.76"
   },
   "devDependencies": {
@@ -43,9 +45,7 @@
     "@types/node": "^22.18.0",
     "@types/pdfmake": "^0.3.3",
     "@types/supertest": "^7.2.1",
-    "prisma": "^6.19.0",
     "supertest": "^7.1.4",
-    "tsx": "^4.20.6",
     "typescript": "^5.9.3",
     "vitest": "^3.2.4"
   }

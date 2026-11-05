@@ -1,0 +1,36 @@
+# Chạy:  cd deploy && cp .env.docker.example .env && docker compose up -d --build
+# Cập nhật phiên bản mới: thay mã nguồn rồi chạy lại "docker compose up -d --build"
+# Dữ liệu nằm trong volume (pgdata, wmsdata) nên KHÔNG bị ghi đè khi cập nhật.
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: sambo_wms
+      POSTGRES_USER: wms_user
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Đặt DB_PASSWORD trong deploy/.env}
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U wms_user -d sambo_wms"], interval: 5s, retries: 20 }
+  app:
+    build: { context: .., dockerfile: deploy/Dockerfile }
+    restart: unless-stopped
+    depends_on: { db: { condition: service_healthy } }
+    environment:
+      DATABASE_URL: postgresql://wms_user:${DB_PASSWORD}@db:5432/sambo_wms
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      BACKUP_CRON: ${BACKUP_CRON:-30 1 * * *}
+      BACKUP_KEEP: ${BACKUP_KEEP:-30}
+      APP_VERSION: ${APP_VERSION:-1.0.0}
+    volumes: [wmsdata:/data]
+    ports: ["${APP_PORT:-4000}:4000"]
+  # Tùy chọn: công khai an toàn qua Cloudflare Tunnel (không mở cổng router). Bật bằng: docker compose --profile cloudflare up -d
+  cloudflared:
+    image: cloudflare/cloudflared:2025.9.1
+    profiles: [cloudflare]
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on: [app]
+volumes:
+  pgdata:
+  wmsdata:
