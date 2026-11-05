@@ -46,7 +46,7 @@ cd server && npm test     # tạo DB kiểm thử tạm riêng, chạy 38 kịch
 
 ## Triển khai & cập nhật
 
-Xem `docs/04-cai-dat-trien-khai.md`. Tóm tắt:
+Hướng dẫn từng bước (máy chủ + Supabase + Cloudflare, 0 đồng): `docs/07-trien-khai-supabase-cloudflare.md`. Chi tiết kỹ thuật: `docs/04-cai-dat-trien-khai.md`. Tóm tắt:
 - Đóng gói: `bash deploy/package.sh 1.1.0`
 - Cài lần đầu: `sudo bash deploy/install.sh sambo-wms-1.1.0.tar.gz`
 - Cập nhật (không ghi đè dữ liệu, tự sao lưu, tự quay lui nếu lỗi): `sudo bash deploy/update.sh sambo-wms-1.1.0.tar.gz` – từ 1.0 lên 1.1: tự áp migration thêm bảng hóa chất & mua hàng, tự cấp quyền module mới cho vai trò mặc định, giữ nguyên quyền đã tùy chỉnh
@@ -58,5 +58,5 @@ Xem `docs/04-cai-dat-trien-khai.md`. Tóm tắt:
 server/   prisma/schema.prisma, migrations/, seed.ts · src/modules (API theo module) · src/services/inventory.ts (bộ máy ghi sổ) · tests/
 client/   src/pages (màn hình) · src/components (UI dùng chung) · src/lib (API, quyền, định dạng)
 deploy/   install.sh, update.sh, package.sh, backup.sh, restore.sh, systemd, Docker, Cloudflare Tunnel, Nginx
-docs/     01 phân tích thiết kế · 02 database · 03 API · 04 cài đặt triển khai · 05 hướng dẫn sử dụng · 06 kiểm thử
+docs/     01 phân tích thiết kế · 02 database · 03 API · 04 cài đặt triển khai · 05 hướng dẫn sử dụng · 06 kiểm thử · 07 triển khai Supabase + Cloudflare
 ```
