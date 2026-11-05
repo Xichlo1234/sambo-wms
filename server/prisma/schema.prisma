@@ -1,0 +1,975 @@
+// SAMBO GOLD – WAREHOUSE MANAGEMENT SYSTEM
+// Quy ước: tên bảng & cột snake_case để khớp tài liệu thiết kế database (docs/02-database.md)
+// Mọi thay đổi cấu trúc phải đi qua migration (prisma migrate) – KHÔNG sửa trực tiếp DB production.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ======================================================================
+// ENUMS
+// ======================================================================
+
+enum RecordStatus {
+  ACTIVE
+  INACTIVE // Khóa / ngừng sử dụng (không xóa)
+}
+
+enum DocStatus {
+  DRAFT // Nháp
+  SUBMITTED // Chờ duyệt
+  APPROVED // Đã duyệt (chưa ghi sổ – ví dụ phiếu xuất chờ xuất)
+  COUNTING // Kiểm kê: đang kiểm đếm
+  INSPECTED // Hàng trả lại: đã kiểm tra chất lượng
+  POSTED // Đã ghi sổ
+  ISSUED // Phiếu xuất: đã xuất kho (đã ghi sổ)
+  RECEIVED // Phiếu xuất: người nhận đã xác nhận
+  REJECTED // Từ chối
+  CANCELLED // Hủy (chỉ khi chưa ghi sổ)
+}
+
+enum WarehouseType {
+  GENERAL // Kho mỏ (vật tư, thiết bị)
+  CHEMICAL // Kho hóa chất
+}
+
+enum ItemKind {
+  MATERIAL // Vật tư, phụ tùng, công cụ dụng cụ, PPE...
+  EQUIPMENT // Thiết bị, máy móc
+}
+
+enum StockBucket {
+  USABLE // Tồn khả dụng
+  QUARANTINE // Chờ kiểm tra
+  DAMAGED // Hư hỏng / chờ xử lý
+}
+
+enum MovementType {
+  OPENING // Tồn đầu kỳ (import)
+  RECEIPT // Nhập kho
+  ISSUE // Xuất kho
+  TRANSFER_OUT // Điều chuyển đi
+  TRANSFER_IN // Điều chuyển đến
+  RETURN // Hàng trả lại
+  ADJUSTMENT // Điều chỉnh
+  STOCKTAKE // Điều chỉnh theo kiểm kê
+  INSPECTION // Giải phóng / loại hàng chờ kiểm tra
+}
+
+enum InspectionStatus {
+  NONE
+  PENDING
+  RELEASED
+  REJECTED
+}
+
+enum AdjustmentSource {
+  MANUAL
+  STOCKTAKE
+  OPENING
+}
+
+enum StocktakeScope {
+  ALL
+  CATEGORY
+  LOCATION
+  ITEMS
+}
+
+enum BackupType {
+  AUTO
+  MANUAL
+}
+
+// ======================================================================
+// NHÓM NGƯỜI DÙNG & PHÂN QUYỀN
+// ======================================================================
+
+model User {
+  id                   Int          @id @default(autoincrement())
+  username             String       @unique @db.VarChar(50)
+  full_name            String       @db.VarChar(150)
+  email                String?      @db.VarChar(150)
+  phone                String?      @db.VarChar(30)
+  position             String?      @db.VarChar(100)
+  password_hash        String
+  department_id        Int?
+  status               RecordStatus @default(ACTIVE)
+  must_change_password Boolean      @default(true)
+  failed_attempts      Int          @default(0)
+  locked_until         DateTime?
+  last_login_at        DateTime?
+  created_at           DateTime     @default(now())
+  updated_at           DateTime     @updatedAt
+  created_by           Int?
+  updated_by           Int?
+
+  department Department? @relation("DepartmentMembers", fields: [department_id], references: [id])
+  roles      UserRole[]
+  sessions   Session[]
+
+  receipts_created    StockReceipt[]    @relation("ReceiptCreator")
+  receipts_approved   StockReceipt[]    @relation("ReceiptApprover")
+  issues_requested    StockIssue[]      @relation("IssueRequester")
+  issues_approved     StockIssue[]      @relation("IssueApprover")
+  issues_issued       StockIssue[]      @relation("IssueIssuer")
+  transfers_created   StockTransfer[]   @relation("TransferCreator")
+  returns_created     StockReturn[]     @relation("ReturnCreator")
+  adjustments_created StockAdjustment[] @relation("AdjustmentCreator")
+  stocktakes_created  Stocktake[]       @relation("StocktakeCreator")
+  movements           StockMovement[]
+  approval_actions    ApprovalHistory[]
+
+  @@index([department_id])
+  @@map("users")
+}
+
+model Role {
+  id          Int          @id @default(autoincrement())
+  code        String       @unique @db.VarChar(50)
+  name        String       @db.VarChar(100)
+  description String?
+  is_system   Boolean      @default(false)
+  status      RecordStatus @default(ACTIVE)
+  created_at  DateTime     @default(now())
+  updated_at  DateTime     @updatedAt
+  created_by  Int?
+  updated_by  Int?
+
+  users       UserRole[]
+  permissions RolePermission[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id         Int      @id @default(autoincrement())
+  code       String   @unique @db.VarChar(80)
+  module     String   @db.VarChar(50)
+  name       String   @db.VarChar(150)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  roles RolePermission[]
+
+  @@map("permissions")
+}
+
+model UserRole {
+  user_id    Int
+  role_id    Int
+  created_at DateTime @default(now())
+  created_by Int?
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [role_id], references: [id], onDelete: Cascade)
+
+  @@id([user_id, role_id])
+  @@map("user_roles")
+}
+
+model RolePermission {
+  role_id       Int
+  permission_id Int
+  created_at    DateTime @default(now())
+
+  role       Role       @relation(fields: [role_id], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permission_id], references: [id], onDelete: Cascade)
+
+  @@id([role_id, permission_id])
+  @@map("role_permissions")
+}
+
+model Session {
+  id           String    @id @default(uuid()) @db.Uuid
+  token_hash   String    @unique @db.VarChar(64)
+  user_id      Int
+  ip           String?   @db.VarChar(64)
+  user_agent   String?   @db.VarChar(300)
+  created_at   DateTime  @default(now())
+  last_seen_at DateTime  @default(now())
+  expires_at   DateTime
+  revoked_at   DateTime?
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@map("sessions")
+}
+
+model Department {
+  id              Int          @id @default(autoincrement())
+  code            String       @unique @db.VarChar(30)
+  name            String       @db.VarChar(150)
+  manager_user_id Int?
+  manager_name    String?      @db.VarChar(150)
+  area            String?      @db.VarChar(200)
+  description     String?
+  status          RecordStatus @default(ACTIVE)
+  created_at      DateTime     @default(now())
+  updated_at      DateTime     @updatedAt
+  created_by      Int?
+  updated_by      Int?
+
+  members User[] @relation("DepartmentMembers")
+
+  receipts  StockReceipt[]
+  issues    StockIssue[]
+  returns   StockReturn[]
+  movements StockMovement[]
+
+  @@map("departments")
+}
+
+// ======================================================================
+// NHÓM DANH MỤC KHO
+// ======================================================================
+
+model Warehouse {
+  id          Int           @id @default(autoincrement())
+  code        String        @unique @db.VarChar(30)
+  name        String        @db.VarChar(150)
+  type        WarehouseType @default(GENERAL)
+  address     String?
+  manager     String?       @db.VarChar(150)
+  description String?
+  status      RecordStatus  @default(ACTIVE)
+  created_at  DateTime      @default(now())
+  updated_at  DateTime      @updatedAt
+  created_by  Int?
+  updated_by  Int?
+
+  locations WarehouseLocation[]
+
+  receipts       StockReceipt[]
+  issues         StockIssue[]
+  transfers_from StockTransfer[]    @relation("TransferFrom")
+  transfers_to   StockTransfer[]    @relation("TransferTo")
+  returns        StockReturn[]
+  adjustments    StockAdjustment[]
+  stocktakes     Stocktake[]
+  movements      StockMovement[]
+  balances       InventoryBalance[]
+
+  @@map("warehouses")
+}
+
+model WarehouseLocation {
+  id           Int          @id @default(autoincrement())
+  warehouse_id Int
+  code         String       @db.VarChar(50)
+  name         String       @db.VarChar(150)
+  zone         String?      @db.VarChar(100)
+  description  String?
+  status       RecordStatus @default(ACTIVE)
+  created_at   DateTime     @default(now())
+  updated_at   DateTime     @updatedAt
+  created_by   Int?
+  updated_by   Int?
+
+  warehouse Warehouse @relation(fields: [warehouse_id], references: [id])
+
+  items               Item[]
+  receipt_lines       StockReceiptItem[]
+  issue_lines         StockIssueItem[]
+  transfer_lines_from StockTransferItem[]   @relation("TransferLineFrom")
+  transfer_lines_to   StockTransferItem[]   @relation("TransferLineTo")
+  return_lines        StockReturnItem[]
+  adjustment_lines    StockAdjustmentItem[]
+  stocktake_lines     StocktakeItem[]
+  movements           StockMovement[]
+  balances            InventoryBalance[]
+
+  @@unique([warehouse_id, code])
+  @@map("warehouse_locations")
+}
+
+model ItemCategory {
+  id          Int          @id @default(autoincrement())
+  code        String       @unique @db.VarChar(30)
+  name        String       @db.VarChar(150)
+  parent_id   Int?
+  description String?
+  status      RecordStatus @default(ACTIVE)
+  created_at  DateTime     @default(now())
+  updated_at  DateTime     @updatedAt
+  created_by  Int?
+  updated_by  Int?
+
+  parent   ItemCategory?  @relation("CategoryTree", fields: [parent_id], references: [id])
+  children ItemCategory[] @relation("CategoryTree")
+
+  items Item[]
+
+  @@index([parent_id])
+  @@map("item_categories")
+}
+
+model Unit {
+  id         Int          @id @default(autoincrement())
+  code       String       @unique @db.VarChar(20)
+  name       String       @db.VarChar(50)
+  status     RecordStatus @default(ACTIVE)
+  created_at DateTime     @default(now())
+  updated_at DateTime     @updatedAt
+  created_by Int?
+  updated_by Int?
+
+  items Item[]
+
+  @@map("units")
+}
+
+model Item {
+  id                    Int          @id @default(autoincrement())
+  code                  String       @unique @db.VarChar(50)
+  name                  String       @db.VarChar(250)
+  name_en               String?      @db.VarChar(250)
+  kind                  ItemKind     @default(MATERIAL)
+  category_id           Int
+  subcategory_id        Int?
+  specification         String?
+  model                 String?      @db.VarChar(150)
+  manufacturer          String?      @db.VarChar(150)
+  origin                String?      @db.VarChar(100)
+  unit_id               Int
+  barcode               String?      @unique @db.VarChar(100)
+  default_location_id   Int?
+  min_stock             Decimal      @default(0) @db.Decimal(18, 4)
+  max_stock             Decimal?     @db.Decimal(18, 4)
+  safety_stock          Decimal      @default(0) @db.Decimal(18, 4)
+  max_issue_qty         Decimal?     @db.Decimal(18, 4) // Định mức xuất / 1 phiếu (cảnh báo)
+  preferred_supplier_id Int?
+  serial_no             String?      @db.VarChar(100)
+  asset_code            String?      @db.VarChar(100)
+  search_text           String       @default("") // tên + quy cách đã bỏ dấu, phục vụ tìm kiếm & cảnh báo trùng (pg_trgm)
+  status                RecordStatus @default(ACTIVE)
+  note                  String?
+  created_at            DateTime     @default(now())
+  updated_at            DateTime     @updatedAt
+  created_by            Int?
+  updated_by            Int?
+
+  category           ItemCategory       @relation(fields: [category_id], references: [id])
+  unit               Unit               @relation(fields: [unit_id], references: [id])
+  default_location   WarehouseLocation? @relation(fields: [default_location_id], references: [id])
+  preferred_supplier Supplier?          @relation(fields: [preferred_supplier_id], references: [id])
+
+  receipt_lines    StockReceiptItem[]
+  issue_lines      StockIssueItem[]
+  transfer_lines   StockTransferItem[]
+  return_lines     StockReturnItem[]
+  adjustment_lines StockAdjustmentItem[]
+  stocktake_lines  StocktakeItem[]
+  movements        StockMovement[]
+  balances         InventoryBalance[]
+
+  @@index([category_id])
+  @@index([kind, status])
+  @@map("items")
+}
+
+model Supplier {
+  id                 Int          @id @default(autoincrement())
+  code               String       @unique @db.VarChar(30)
+  name               String       @db.VarChar(250)
+  address            String?
+  country            String?      @db.VarChar(100)
+  contact_person     String?      @db.VarChar(150)
+  phone              String?      @db.VarChar(50)
+  email              String?      @db.VarChar(150)
+  tax_code           String?      @db.VarChar(50)
+  supply_groups      String?
+  bank_account       String?      @db.VarChar(100) // dữ liệu nhạy cảm
+  bank_name          String?      @db.VarChar(200) // dữ liệu nhạy cảm
+  payment_terms      String?
+  cooperation_status String       @default("ACTIVE") @db.VarChar(30) // ACTIVE | PROBATION | SUSPENDED | STOPPED
+  note               String?
+  search_text        String       @default("")
+  status             RecordStatus @default(ACTIVE)
+  created_at         DateTime     @default(now())
+  updated_at         DateTime     @updatedAt
+  created_by         Int?
+  updated_by         Int?
+
+  items Item[]
+
+  receipts  StockReceipt[]
+  movements StockMovement[]
+
+  @@map("suppliers")
+}
+
+// ======================================================================
+// NHÓM NHẬP – XUẤT KHO MỎ
+// ======================================================================
+
+model StockReceipt {
+  id                Int       @id @default(autoincrement())
+  code              String    @unique @db.VarChar(30)
+  client_request_id String?   @unique @db.VarChar(64) // chống tạo trùng khi bấm nhiều lần
+  warehouse_id      Int
+  doc_date          DateTime  @db.Date // Ngày chứng từ
+  received_date     DateTime? @db.Date // Ngày nhận hàng thực tế
+  posted_at         DateTime? // Ngày ghi sổ
+  supplier_id       Int?
+  po_number         String?   @db.VarChar(50)
+  supplier_doc_no   String?   @db.VarChar(100) // số hóa đơn / phiếu giao hàng
+  deliverer_name    String?   @db.VarChar(150)
+  receiver_user_id  Int?
+  receiver_name     String?   @db.VarChar(150)
+  department_id     Int?
+  currency          String?   @db.VarChar(10)
+  exchange_rate     Decimal?  @db.Decimal(18, 6)
+  docs_checked      Boolean   @default(false)
+  qty_checked       Boolean   @default(false)
+  spec_checked      Boolean   @default(false)
+  status            DocStatus @default(DRAFT)
+  note              String?
+  reject_reason     String?
+  cancel_reason     String?
+  created_at        DateTime  @default(now())
+  updated_at        DateTime  @updatedAt
+  created_by        Int
+  updated_by        Int?
+  submitted_by      Int?
+  submitted_at      DateTime?
+  approved_by       Int?
+  approved_at       DateTime?
+  cancelled_by      Int?
+  cancelled_at      DateTime?
+
+  warehouse  Warehouse          @relation(fields: [warehouse_id], references: [id])
+  supplier   Supplier?          @relation(fields: [supplier_id], references: [id])
+  department Department?        @relation(fields: [department_id], references: [id])
+  creator    User               @relation("ReceiptCreator", fields: [created_by], references: [id])
+  approver   User?              @relation("ReceiptApprover", fields: [approved_by], references: [id])
+  lines      StockReceiptItem[]
+
+  @@index([status, doc_date])
+  @@index([supplier_id])
+  @@map("stock_receipts")
+}
+
+model StockReceiptItem {
+  id                Int              @id @default(autoincrement())
+  receipt_id        Int
+  line_no           Int
+  item_id           Int
+  location_id       Int
+  qty_doc           Decimal          @db.Decimal(18, 4) // SL theo chứng từ
+  qty_received      Decimal          @db.Decimal(18, 4) // SL thực nhận
+  qty_accepted      Decimal          @db.Decimal(18, 4) // SL đạt – nhập tồn khả dụng
+  qty_pending       Decimal          @default(0) @db.Decimal(18, 4) // SL chờ kiểm tra – nhập kho cách ly
+  qty_rejected      Decimal          @default(0) @db.Decimal(18, 4) // SL không đạt – không nhập kho
+  unit_price        Decimal?         @db.Decimal(18, 4)
+  amount            Decimal?         @db.Decimal(20, 4)
+  condition_note    String?
+  note              String?
+  inspection_status InspectionStatus @default(NONE)
+  inspected_by      Int?
+  inspected_at      DateTime?
+  created_at        DateTime         @default(now())
+  updated_at        DateTime         @updatedAt
+
+  receipt  StockReceipt      @relation(fields: [receipt_id], references: [id], onDelete: Cascade)
+  item     Item              @relation(fields: [item_id], references: [id])
+  location WarehouseLocation @relation(fields: [location_id], references: [id])
+
+  @@index([receipt_id])
+  @@index([item_id])
+  @@map("stock_receipt_items")
+}
+
+model StockIssue {
+  id                   Int       @id @default(autoincrement())
+  code                 String    @unique @db.VarChar(30)
+  client_request_id    String?   @unique @db.VarChar(64)
+  warehouse_id         Int
+  doc_date             DateTime  @db.Date
+  issued_at            DateTime? // Ngày xuất thực tế = ngày ghi sổ
+  department_id        Int
+  requester_id         Int
+  purpose              String
+  work_area            String?   @db.VarChar(200)
+  receiver_user_id     Int?
+  receiver_name        String?   @db.VarChar(150)
+  receive_confirmed_at DateTime?
+  receive_confirmed_by Int?
+  receive_signature    String?   @db.VarChar(150) // Xác nhận điện tử: họ tên người nhận gõ lại
+  quota_warning        Boolean   @default(false)
+  quota_note           String?
+  status               DocStatus @default(DRAFT)
+  note                 String?
+  reject_reason        String?
+  cancel_reason        String?
+  created_at           DateTime  @default(now())
+  updated_at           DateTime  @updatedAt
+  created_by           Int
+  updated_by           Int?
+  submitted_at         DateTime?
+  approved_by          Int?
+  approved_at          DateTime?
+  issued_by            Int?
+  cancelled_by         Int?
+  cancelled_at         DateTime?
+
+  warehouse  Warehouse        @relation(fields: [warehouse_id], references: [id])
+  department Department       @relation(fields: [department_id], references: [id])
+  requester  User             @relation("IssueRequester", fields: [requester_id], references: [id])
+  approver   User?            @relation("IssueApprover", fields: [approved_by], references: [id])
+  issuer     User?            @relation("IssueIssuer", fields: [issued_by], references: [id])
+  lines      StockIssueItem[]
+
+  returns StockReturn[]
+
+  @@index([status, doc_date])
+  @@index([department_id])
+  @@map("stock_issues")
+}
+
+model StockIssueItem {
+  id            Int      @id @default(autoincrement())
+  issue_id      Int
+  line_no       Int
+  item_id       Int
+  location_id   Int?
+  qty_requested Decimal  @db.Decimal(18, 4)
+  qty_approved  Decimal? @db.Decimal(18, 4)
+  qty_issued    Decimal? @db.Decimal(18, 4)
+  note          String?
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  issue    StockIssue         @relation(fields: [issue_id], references: [id], onDelete: Cascade)
+  item     Item               @relation(fields: [item_id], references: [id])
+  location WarehouseLocation? @relation(fields: [location_id], references: [id])
+
+  @@index([issue_id])
+  @@index([item_id])
+  @@map("stock_issue_items")
+}
+
+model StockTransfer {
+  id                Int       @id @default(autoincrement())
+  code              String    @unique @db.VarChar(30)
+  client_request_id String?   @unique @db.VarChar(64)
+  from_warehouse_id Int
+  to_warehouse_id   Int
+  doc_date          DateTime  @db.Date
+  sender_name       String?   @db.VarChar(150)
+  receiver_name     String?   @db.VarChar(150)
+  handover_at       DateTime?
+  posted_at         DateTime?
+  reason            String?
+  status            DocStatus @default(DRAFT)
+  note              String?
+  reject_reason     String?
+  cancel_reason     String?
+  created_at        DateTime  @default(now())
+  updated_at        DateTime  @updatedAt
+  created_by        Int
+  updated_by        Int?
+  submitted_at      DateTime?
+  approved_by       Int?
+  approved_at       DateTime?
+  cancelled_by      Int?
+  cancelled_at      DateTime?
+
+  from_warehouse Warehouse           @relation("TransferFrom", fields: [from_warehouse_id], references: [id])
+  to_warehouse   Warehouse           @relation("TransferTo", fields: [to_warehouse_id], references: [id])
+  creator        User                @relation("TransferCreator", fields: [created_by], references: [id])
+  lines          StockTransferItem[]
+
+  @@index([status, doc_date])
+  @@map("stock_transfers")
+}
+
+model StockTransferItem {
+  id               Int      @id @default(autoincrement())
+  transfer_id      Int
+  line_no          Int
+  item_id          Int
+  from_location_id Int
+  to_location_id   Int
+  qty              Decimal  @db.Decimal(18, 4)
+  note             String?
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
+
+  transfer      StockTransfer     @relation(fields: [transfer_id], references: [id], onDelete: Cascade)
+  item          Item              @relation(fields: [item_id], references: [id])
+  from_location WarehouseLocation @relation("TransferLineFrom", fields: [from_location_id], references: [id])
+  to_location   WarehouseLocation @relation("TransferLineTo", fields: [to_location_id], references: [id])
+
+  @@index([transfer_id])
+  @@map("stock_transfer_items")
+}
+
+model StockReturn {
+  id                Int       @id @default(autoincrement())
+  code              String    @unique @db.VarChar(30)
+  client_request_id String?   @unique @db.VarChar(64)
+  warehouse_id      Int
+  department_id     Int
+  related_issue_id  Int?
+  doc_date          DateTime  @db.Date
+  returned_by_name  String?   @db.VarChar(150)
+  reason            String?
+  status            DocStatus @default(DRAFT)
+  note              String?
+  reject_reason     String?
+  cancel_reason     String?
+  posted_at         DateTime?
+  created_at        DateTime  @default(now())
+  updated_at        DateTime  @updatedAt
+  created_by        Int
+  updated_by        Int?
+  submitted_at      DateTime?
+  inspected_by      Int?
+  inspected_at      DateTime?
+  approved_by       Int?
+  approved_at       DateTime?
+  cancelled_by      Int?
+  cancelled_at      DateTime?
+
+  warehouse     Warehouse         @relation(fields: [warehouse_id], references: [id])
+  department    Department        @relation(fields: [department_id], references: [id])
+  related_issue StockIssue?       @relation(fields: [related_issue_id], references: [id])
+  creator       User              @relation("ReturnCreator", fields: [created_by], references: [id])
+  lines         StockReturnItem[]
+
+  @@index([status, doc_date])
+  @@map("stock_returns")
+}
+
+model StockReturnItem {
+  id              Int      @id @default(autoincrement())
+  return_id       Int
+  line_no         Int
+  item_id         Int
+  location_id     Int
+  qty_returned    Decimal  @db.Decimal(18, 4)
+  qty_usable      Decimal? @db.Decimal(18, 4)
+  qty_damaged     Decimal? @db.Decimal(18, 4)
+  qty_pending     Decimal? @db.Decimal(18, 4)
+  reason          String?
+  inspection_note String?
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+
+  stock_return StockReturn       @relation(fields: [return_id], references: [id], onDelete: Cascade)
+  item         Item              @relation(fields: [item_id], references: [id])
+  location     WarehouseLocation @relation(fields: [location_id], references: [id])
+
+  @@index([return_id])
+  @@map("stock_return_items")
+}
+
+model StockAdjustment {
+  id                Int              @id @default(autoincrement())
+  code              String           @unique @db.VarChar(30)
+  client_request_id String?          @unique @db.VarChar(64)
+  warehouse_id      Int
+  source            AdjustmentSource @default(MANUAL)
+  stocktake_id      Int?             @unique
+  doc_date          DateTime         @db.Date
+  reason            String
+  status            DocStatus        @default(DRAFT)
+  note              String?
+  reject_reason     String?
+  cancel_reason     String?
+  posted_at         DateTime?
+  created_at        DateTime         @default(now())
+  updated_at        DateTime         @updatedAt
+  created_by        Int
+  updated_by        Int?
+  submitted_at      DateTime?
+  approved_by       Int?
+  approved_at       DateTime?
+  cancelled_by      Int?
+  cancelled_at      DateTime?
+
+  warehouse Warehouse             @relation(fields: [warehouse_id], references: [id])
+  stocktake Stocktake?            @relation(fields: [stocktake_id], references: [id])
+  creator   User                  @relation("AdjustmentCreator", fields: [created_by], references: [id])
+  lines     StockAdjustmentItem[]
+
+  @@index([status, doc_date])
+  @@map("stock_adjustments")
+}
+
+model StockAdjustmentItem {
+  id            Int         @id @default(autoincrement())
+  adjustment_id Int
+  line_no       Int
+  item_id       Int
+  location_id   Int
+  bucket        StockBucket @default(USABLE)
+  qty_delta     Decimal     @db.Decimal(18, 4) // + tăng, - giảm
+  unit_price    Decimal?    @db.Decimal(18, 4)
+  reason        String?
+  created_at    DateTime    @default(now())
+  updated_at    DateTime    @updatedAt
+
+  adjustment StockAdjustment   @relation(fields: [adjustment_id], references: [id], onDelete: Cascade)
+  item       Item              @relation(fields: [item_id], references: [id])
+  location   WarehouseLocation @relation(fields: [location_id], references: [id])
+
+  @@index([adjustment_id])
+  @@map("stock_adjustment_items")
+}
+
+model Stocktake {
+  id            Int            @id @default(autoincrement())
+  code          String         @unique @db.VarChar(30)
+  warehouse_id  Int
+  name          String         @db.VarChar(200)
+  scope_type    StocktakeScope
+  scope_ref     Json? // { category_ids: [], location_ids: [], item_ids: [] }
+  snapshot_at   DateTime? // Thời điểm chốt tồn sổ
+  status        DocStatus      @default(DRAFT)
+  note          String?
+  reject_reason String?
+  cancel_reason String?
+  created_at    DateTime       @default(now())
+  updated_at    DateTime       @updatedAt
+  created_by    Int
+  updated_by    Int?
+  submitted_at  DateTime?
+  approved_by   Int?
+  approved_at   DateTime?
+  cancelled_by  Int?
+  cancelled_at  DateTime?
+
+  warehouse  Warehouse        @relation(fields: [warehouse_id], references: [id])
+  creator    User             @relation("StocktakeCreator", fields: [created_by], references: [id])
+  lines      StocktakeItem[]
+  adjustment StockAdjustment?
+
+  @@index([status])
+  @@map("stocktakes")
+}
+
+model StocktakeItem {
+  id           Int       @id @default(autoincrement())
+  stocktake_id Int
+  item_id      Int
+  location_id  Int
+  book_qty     Decimal   @db.Decimal(18, 4) // Tồn sổ tại thời điểm chốt
+  counted_qty  Decimal?  @db.Decimal(18, 4) // Số thực tế
+  reason       String? // Giải trình chênh lệch
+  counted_by   Int?
+  counted_at   DateTime?
+  created_at   DateTime  @default(now())
+  updated_at   DateTime  @updatedAt
+
+  stocktake Stocktake         @relation(fields: [stocktake_id], references: [id], onDelete: Cascade)
+  item      Item              @relation(fields: [item_id], references: [id])
+  location  WarehouseLocation @relation(fields: [location_id], references: [id])
+
+  @@unique([stocktake_id, item_id, location_id])
+  @@map("stocktake_items")
+}
+
+// Sổ cái kho – BẤT BIẾN (không update/delete). Điều chỉnh bằng chứng từ điều chỉnh.
+model StockMovement {
+  id                     BigInt       @id @default(autoincrement())
+  warehouse_id           Int
+  location_id            Int
+  item_id                Int
+  bucket                 StockBucket
+  movement_type          MovementType
+  qty_in                 Decimal      @default(0) @db.Decimal(18, 4)
+  qty_out                Decimal      @default(0) @db.Decimal(18, 4)
+  balance_after          Decimal      @db.Decimal(18, 4) // tồn (kho + mặt hàng + bucket) sau giao dịch
+  location_balance_after Decimal      @db.Decimal(18, 4) // tồn tại vị trí sau giao dịch
+  unit_cost              Decimal?     @db.Decimal(18, 4)
+  doc_type               String       @db.VarChar(30)
+  doc_id                 Int
+  doc_code               String       @db.VarChar(30)
+  doc_line_id            Int?
+  doc_date               DateTime     @db.Date
+  posted_at              DateTime     @default(now())
+  department_id          Int?
+  supplier_id            Int?
+  user_id                Int
+  note                   String?
+  created_at             DateTime     @default(now())
+
+  warehouse  Warehouse         @relation(fields: [warehouse_id], references: [id])
+  location   WarehouseLocation @relation(fields: [location_id], references: [id])
+  item       Item              @relation(fields: [item_id], references: [id])
+  department Department?       @relation(fields: [department_id], references: [id])
+  supplier   Supplier?         @relation(fields: [supplier_id], references: [id])
+  user       User              @relation(fields: [user_id], references: [id])
+
+  @@index([item_id, posted_at])
+  @@index([warehouse_id, posted_at])
+  @@index([doc_type, doc_id])
+  @@index([department_id, posted_at])
+  @@map("stock_movements")
+}
+
+// Số dư hiện tại – được cập nhật trong CÙNG transaction với stock_movements; có thể đối chiếu lại từ sổ cái.
+model InventoryBalance {
+  id               Int       @id @default(autoincrement())
+  warehouse_id     Int
+  location_id      Int
+  item_id          Int
+  qty_usable       Decimal   @default(0) @db.Decimal(18, 4)
+  qty_quarantine   Decimal   @default(0) @db.Decimal(18, 4)
+  qty_damaged      Decimal   @default(0) @db.Decimal(18, 4)
+  last_movement_at DateTime?
+  created_at       DateTime  @default(now())
+  updated_at       DateTime  @updatedAt
+
+  warehouse Warehouse         @relation(fields: [warehouse_id], references: [id])
+  location  WarehouseLocation @relation(fields: [location_id], references: [id])
+  item      Item              @relation(fields: [item_id], references: [id])
+
+  @@unique([warehouse_id, location_id, item_id])
+  @@index([item_id])
+  @@map("inventory_balances")
+}
+
+// ======================================================================
+// NHÓM KIỂM SOÁT
+// ======================================================================
+
+model ApprovalHistory {
+  id          BigInt   @id @default(autoincrement())
+  entity_type String   @db.VarChar(40)
+  entity_id   Int
+  action      String   @db.VarChar(30) // CREATE, SUBMIT, APPROVE, REJECT, CANCEL, POST, ISSUE, CONFIRM, INSPECT...
+  from_status String?  @db.VarChar(20)
+  to_status   String?  @db.VarChar(20)
+  user_id     Int
+  comment     String?
+  created_at  DateTime @default(now())
+
+  user User @relation(fields: [user_id], references: [id])
+
+  @@index([entity_type, entity_id])
+  @@map("approval_history")
+}
+
+model AuditLog {
+  id          BigInt   @id @default(autoincrement())
+  user_id     Int?
+  username    String?  @db.VarChar(50)
+  action      String   @db.VarChar(40)
+  entity_type String   @db.VarChar(40)
+  entity_id   String?  @db.VarChar(40)
+  entity_code String?  @db.VarChar(60)
+  before_data Json?
+  after_data  Json?
+  ip          String?  @db.VarChar(64)
+  user_agent  String?  @db.VarChar(300)
+  session_id  String?  @db.VarChar(40)
+  created_at  DateTime @default(now())
+
+  @@index([entity_type, entity_id])
+  @@index([user_id, created_at])
+  @@index([created_at])
+  @@map("audit_logs")
+}
+
+model Attachment {
+  id          Int       @id @default(autoincrement())
+  entity_type String    @db.VarChar(40)
+  entity_id   Int
+  category    String    @default("OTHER") @db.VarChar(30) // INVOICE, DELIVERY_NOTE, PO, PHOTO, TECH_DOC, SDS, CERT, OTHER
+  file_name   String    @db.VarChar(255)
+  stored_name String    @unique @db.VarChar(255)
+  mime_type   String    @db.VarChar(120)
+  size_bytes  Int
+  sha256      String    @db.VarChar(64)
+  note        String?
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+  created_by  Int
+  deleted_at  DateTime?
+  deleted_by  Int?
+
+  @@index([entity_type, entity_id])
+  @@map("attachments")
+}
+
+model Notification {
+  id         Int       @id @default(autoincrement())
+  user_id    Int
+  type       String    @db.VarChar(40)
+  title      String    @db.VarChar(200)
+  message    String?
+  link       String?   @db.VarChar(300)
+  read_at    DateTime?
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+
+  @@index([user_id, read_at])
+  @@map("notifications")
+}
+
+model SystemSetting {
+  key        String   @id @db.VarChar(80)
+  value      Json
+  updated_by Int?
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@map("system_settings")
+}
+
+model DocSequence {
+  doc_type   String   @db.VarChar(20)
+  period     String   @db.VarChar(10)
+  last_no    Int      @default(0)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@id([doc_type, period])
+  @@map("doc_sequences")
+}
+
+model BackupLog {
+  id          Int        @id @default(autoincrement())
+  file_name   String     @db.VarChar(255)
+  size_bytes  BigInt?
+  sha256      String?    @db.VarChar(64)
+  type        BackupType
+  status      String     @db.VarChar(20) // RUNNING, SUCCESS, FAILED
+  message     String?
+  verified_at DateTime?
+  verify_ok   Boolean?
+  started_at  DateTime   @default(now())
+  finished_at DateTime?
+  created_by  Int?
+  created_at  DateTime   @default(now())
+  updated_at  DateTime   @updatedAt
+
+  @@map("backup_logs")
+}
+
+model ImportBatch {
+  id           Int      @id @default(autoincrement())
+  import_type  String   @db.VarChar(40)
+  file_name    String   @db.VarChar(255)
+  total_rows   Int
+  success_rows Int
+  error_rows   Int
+  skipped_rows Int      @default(0)
+  status       String   @db.VarChar(20)
+  summary      Json?
+  ref_doc      String?  @db.VarChar(40)
+  created_by   Int
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  @@map("import_batches")
+}
