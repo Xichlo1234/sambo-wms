@@ -1,0 +1,337 @@
+﻿=====================================================================
+   SAMBO GOLD - WAREHOUSE MANAGEMENT SYSTEM (WMS) - phiên bản 1.1
+   HƯỚNG DẪN CÀI ĐẶT & QUY TRÌNH VẬN HÀNH TRÊN VPS (CÓ TRẢ PHÍ)
+   Phương án khuyến nghị: VPS Ubuntu 24.04 + PostgreSQL trên chính VPS
+                          + Cloudflare (HTTPS, Tunnel, Access, R2)
+=====================================================================
+
+VÌ SAO CHỌN PHƯƠNG ÁN NÀY
+ - Đây đúng là cấu hình hệ thống được thiết kế và kiểm thử (Ubuntu +
+   PostgreSQL 16 + install.sh/update.sh) - ít bước nhất, ít rủi ro nhất.
+ - CSDL nằm cùng máy với ứng dụng: nhanh nhất, không phụ thuộc
+   Supabase (không cần Supabase nữa), không bị "tạm dừng".
+ - Chạy 24/7, không phụ thuộc máy tính văn phòng, không dùng ổ C.
+ - Không mở cổng web ra Internet: người dùng vào qua Cloudflare Tunnel,
+   chỉ email công ty mới qua được Cloudflare Access.
+ - Sao lưu 3 lớp: tự động hằng đêm trên VPS + bản sao lên Cloudflare R2
+   (nơi khác) + snapshot toàn bộ máy của nhà cung cấp VPS.
+
+CHI PHÍ DỰ KIẾN (giá tham khảo - kiểm tra lại trên trang nhà cung cấp)
+ - VPS 2 vCPU / 4 GB RAM / 80 GB SSD ............ khoảng 20-25 USD/tháng
+   (hoặc 400.000-700.000 đ/tháng ở nhà cung cấp Việt Nam)
+ - Snapshot / backup tự động của VPS ............ khoảng 20% giá VPS
+ - Tên miền .com hoặc .vn ........................ khoảng 300.000-800.000 đ/năm
+ - Cloudflare (Tunnel, Access <= 50 người, R2 <= 10 GB) ......... 0 đ
+
+CHỌN NHÀ CUNG CẤP VPS
+ a) Công ty cần HÓA ĐƠN VAT, thanh toán chuyển khoản:
+    chọn nhà cung cấp Việt Nam có trung tâm dữ liệu tại VN
+    (vd Viettel IDC, VNPT, FPT Cloud, BizFly Cloud).
+ b) Không cần hóa đơn VN, thanh toán thẻ quốc tế:
+    DigitalOcean hoặc Vultr, vùng Singapore.
+ Cấu hình chọn (bắt buộc):
+    - Hệ điều hành: Ubuntu 24.04 LTS (64-bit, x86/AMD64)
+    - 2 vCPU, 4 GB RAM, >= 80 GB SSD (tối thiểu 2 GB RAM - KHÔNG nên)
+    - Bật dịch vụ Backup/Snapshot tự động hằng tuần nếu có.
+
+QUY ƯỚC
+ - [PowerShell] : trên máy Windows, Start -> gõ PowerShell -> Enter
+                  (KHÔNG cần quyền Admin).
+ - [VPS]        : cửa sổ đã kết nối SSH vào VPS (dấu nhắc dạng
+                  root@sambo-wms:~# hoặc sambo@sambo-wms:~$).
+ - Mỗi lệnh chép NGUYÊN 1 dòng, dán (chuột phải), Enter, chờ chạy xong.
+ - <...> là phần phải thay bằng thông tin của bạn (xóa luôn dấu < >).
+
+DANH SÁCH CẦN GHI LẠI (CẤT GIỮ BÍ MẬT, không gửi qua chat/email)
+ [ ] Nhà cung cấp VPS, tài khoản đăng nhập ............ : __________
+ [ ] Địa chỉ IP của VPS .............................. : __________
+ [ ] File khóa SSH: D:\sambo-vps (+ bản sao trên USB)  : __________
+ [ ] Mật khẩu người dùng sambo trên VPS .............. : __________
+ [ ] GitHub token (github_pat_...) ................... : __________
+ [ ] Mật khẩu admin ban đầu SAMBO WMS ................ : __________
+ [ ] Tên miền, địa chỉ truy cập https://wms.<...> .... : __________
+ [ ] R2 Access Key ID / Secret / Endpoint ............ : __________
+
+
+=====================================================================
+PHẦN 1 - TẠO KHÓA SSH TRÊN MÁY WINDOWS (lưu vào ổ D)
+=====================================================================
+1.1 [PowerShell]:
+    ssh-keygen -t ed25519 -f D:\sambo-vps -C sambo-vps
+    -> hỏi passphrase: đặt 1 mật khẩu cho khóa (hoặc Enter để bỏ qua)
+    -> tạo 2 file: D:\sambo-vps (khóa BÍ MẬT) và D:\sambo-vps.pub
+       (khóa công khai).
+1.2 Đặt quyền riêng tư cho khóa bí mật (Windows bắt buộc):
+    icacls D:\sambo-vps /inheritance:r /grant:r "$($env:USERNAME):R"
+1.3 Xem khóa công khai để dán vào trang tạo VPS:
+    Get-Content D:\sambo-vps.pub
+    -> sao chép NGUYÊN dòng bắt đầu bằng ssh-ed25519 ...
+1.4 Sao chép 2 file D:\sambo-vps* vào USB cất giữ. Mất khóa = không
+    vào được VPS (khi đó phải dùng console web của nhà cung cấp).
+
+
+=====================================================================
+PHẦN 2 - TẠO VPS
+=====================================================================
+2.1 Trên trang nhà cung cấp -> Create / Tạo máy chủ:
+    - Image: Ubuntu 24.04 LTS x64
+    - Gói: 2 vCPU / 4 GB RAM / 80 GB SSD
+    - Vùng: Việt Nam (nhà cung cấp VN) hoặc Singapore
+    - SSH Key: Add SSH key -> dán dòng ssh-ed25519 ... ở bước 1.3
+      (nhà cung cấp không có mục SSH key: dùng mật khẩu root họ gửi)
+    - Hostname: sambo-wms
+    - Bật Backups / Auto snapshot nếu có.
+2.2 Tạo xong, ghi lại địa chỉ IP (IPv4) của VPS.
+
+
+=====================================================================
+PHẦN 3 - KẾT NỐI VÀ BẢO MẬT VPS
+=====================================================================
+3.1 [PowerShell] - kết nối (lần đầu hỏi yes/no -> gõ yes):
+    ssh -i D:\sambo-vps root@<IP>
+    (VPS dùng mật khẩu: ssh root@<IP> rồi nhập mật khẩu root)
+
+3.2 [VPS] - cập nhật hệ thống (vài phút; có màn hình hỏi thì Enter):
+    apt update && apt upgrade -y
+
+3.3 Đặt múi giờ Việt Nam:
+    timedatectl set-timezone Asia/Ho_Chi_Minh
+
+3.4 Tạo người quản trị riêng "sambo" (không làm việc bằng root):
+    adduser sambo
+    -> đặt mật khẩu (ghi lại), các câu hỏi khác Enter.
+    usermod -aG sudo sambo
+    mkdir -p /home/sambo/.ssh && cp /root/.ssh/authorized_keys /home/sambo/.ssh/ && chown -R sambo:sambo /home/sambo/.ssh && chmod 700 /home/sambo/.ssh
+
+3.5 Bật tường lửa - CHỈ mở cổng SSH (web đi qua Cloudflare Tunnel):
+    ufw allow OpenSSH && ufw --force enable && ufw status
+
+3.6 Tự cài bản vá bảo mật & chặn dò mật khẩu:
+    apt install -y unattended-upgrades fail2ban git curl
+    dpkg-reconfigure -plow unattended-upgrades
+    -> chọn Yes.
+
+3.7 Thêm bộ nhớ đệm swap 2 GB (giúp build ổn định):
+    fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile && echo '/swapfile none swap sw 0 0' >> /etc/fstab
+
+3.8 Thoát và đăng nhập lại bằng người dùng sambo:
+    exit
+    [PowerShell]  ssh -i D:\sambo-vps sambo@<IP>
+    -> Từ nay luôn đăng nhập bằng sambo. Lệnh quản trị dùng sudo.
+
+3.9 (Khuyến nghị, chỉ làm khi 3.8 ĐĂNG NHẬP ĐƯỢC bằng khóa) - tắt
+    đăng nhập bằng mật khẩu và đăng nhập root:
+    sudo sed -i -e 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' -e 's/^#\?PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config && sudo systemctl restart ssh
+    Mở THÊM một cửa sổ PowerShell, thử ssh -i D:\sambo-vps sambo@<IP>
+    -> vào được mới đóng cửa sổ cũ.
+
+
+=====================================================================
+PHẦN 4 - LẤY MÃ NGUỒN TỪ GITHUB
+=====================================================================
+4.1 Tạo token (nếu chưa có): github.com -> ảnh đại diện -> Settings
+    -> Developer settings -> Personal access tokens -> Fine-grained
+    tokens -> Generate new token
+    - Token name: sambo-vps ; Expiration: 1 year
+    - Repository access: Only select repositories -> sambo-wms
+    - Repository permissions -> Contents: Read-only
+    - Generate token -> sao chép (github_pat_...) -> ghi lại.
+
+4.2 [VPS]:
+    cd ~ && git clone https://github.com/Xichlo1234/sambo-wms.git
+    - Username: Xichlo1234
+    - Password: dán token (không hiện ký tự) -> Enter
+
+4.3 Lưu token để lần cập nhật sau không phải nhập lại:
+    git -C ~/sambo-wms config credential.helper store
+
+
+=====================================================================
+PHẦN 5 - CÀI ĐẶT SAMBO WMS (cài luôn PostgreSQL 16 trên VPS)
+=====================================================================
+5.1 [VPS] - đóng gói:
+    cd ~/sambo-wms && bash deploy/package.sh 1.1.0
+
+5.2 Cài đặt (5-15 phút - tự cài Node.js 22, PostgreSQL 16, tạo CSDL,
+    tạo cấu hình, dịch vụ chạy nền, sao lưu tự động 01:30 hằng đêm):
+    sudo bash deploy/install.sh deploy/dist/sambo-wms-1.1.0.tar.gz
+
+    >>> Màn hình in: ">>> Mật khẩu admin ban đầu: xxxxxxxx"
+        GHI LẠI NGAY.
+    >>> Gần cuối phải thấy "OK – phiên bản 1.1.0 đang chạy." và
+        "Hoàn tất."
+
+5.3 Kiểm tra:
+    curl http://localhost:4000/api/health
+    -> có "status":"ok"
+
+
+=====================================================================
+PHẦN 6 - TÊN MIỀN & CLOUDFLARE TUNNEL (truy cập HTTPS)
+=====================================================================
+6.1 Chưa có tên miền trên Cloudflare:
+    dash.cloudflare.com -> đăng ký tài khoản -> Add a site -> nhập tên
+    miền -> chọn gói Free -> Cloudflare cho 2 nameserver -> vào trang
+    nơi mua tên miền đổi nameserver sang 2 địa chỉ đó -> chờ Cloudflare
+    báo Active (vài phút đến vài giờ).
+    (Có thể mua tên miền .com ngay trong Cloudflare: Domain
+     Registration -> Register Domains.)
+
+6.2 Zero Trust -> Networks -> Tunnels -> Create a tunnel -> Cloudflared
+    -> tên: sambo-wms -> Save tunnel.
+6.3 Chọn Debian, 64-bit -> chép và chạy TỪNG lệnh Cloudflare hiện ra
+    trong cửa sổ [VPS]. Lệnh cuối có dạng:
+    sudo cloudflared service install eyJhIjoi.....
+    -> Connector chuyển "Connected".
+6.4 Next -> Public Hostname:
+    Subdomain: wms ; Domain: <ten-mien> ; Type: HTTP ; URL: localhost:4000
+    -> Save tunnel.
+6.5 [VPS] - bật cookie bảo mật HTTPS:
+    sudo sed -i 's/^COOKIE_SECURE=.*/COOKIE_SECURE=true/' /opt/sambo-wms/shared/.env && sudo systemctl restart sambo-wms
+6.6 Mở https://wms.<ten-mien> trên máy tính và điện thoại.
+
+6.7 Chỉ cho nhân viên vào (BẮT BUỘC khi vận hành thật):
+    Zero Trust -> Access -> Applications -> Add an application
+    -> Self-hosted -> Application domain: wms.<ten-mien>
+    -> Policy: Action Allow ; Include: Emails ending in @<email-cong-ty>
+       (không có email tên miền công ty: chọn "Emails", nhập từng email)
+    -> Save. Người dùng nhận mã qua email -> vào trang đăng nhập WMS.
+
+
+=====================================================================
+PHẦN 7 - ĐĂNG NHẬP LẦN ĐẦU & CẤU HÌNH
+=====================================================================
+7.1 https://wms.<ten-mien> -> admin / mật khẩu ở 5.2 -> đổi mật khẩu.
+7.2 Cấu hình hệ thống:
+    - Cấu hình chung: tên công ty, địa chỉ; Chính sách kho hóa chất &
+      mua hàng (giữ mặc định nếu chưa có quy định khác).
+    - Kho: kiểm tra Kho tổng – Mỏ và Kho hóa chất; thêm kho nếu cần.
+    - Vị trí lưu kho (A-01, A-02..., HC-A1...), Nhóm vật tư, Đơn vị tính.
+7.3 Sao lưu & khôi phục -> Sao lưu ngay -> Kiểm tra toàn vẹn -> Đạt.
+
+
+=====================================================================
+PHẦN 8 - SAO LƯU NGOÀI SITE LÊN CLOUDFLARE R2
+=====================================================================
+8.1 Cloudflare -> R2 Object Storage -> Create bucket: sambo-wms-backup
+8.2 R2 -> Manage API tokens -> Create API token -> Object Read & Write
+    -> chỉ bucket sambo-wms-backup -> Create -> ghi lại Access Key ID,
+    Secret Access Key, Endpoint (https://<id>.r2.cloudflarestorage.com)
+8.3 [VPS]:
+    sudo apt install -y rclone
+    sudo rclone config
+      n -> name: r2 -> Storage: s3 -> provider: Cloudflare
+      -> env_auth: Enter -> access_key_id / secret_access_key: dán
+      -> region: Enter -> endpoint: dán -> còn lại Enter -> y -> q
+8.4 Thử ngay:
+    sudo R2_REMOTE=r2:sambo-wms-backup bash /opt/sambo-wms/current/deploy/backup.sh
+    -> "Kiểm tra toàn vẹn: OK" và "Đã đồng bộ lên r2:sambo-wms-backup"
+8.5 Lịch tự động 02:00 hằng đêm:
+    echo '0 2 * * * root R2_REMOTE=r2:sambo-wms-backup bash /opt/sambo-wms/current/deploy/backup.sh' | sudo tee /etc/cron.d/sambo-wms-r2
+8.6 Cloudflare: bucket -> Settings -> Object lifecycle rules -> xóa
+    file cũ hơn 90 ngày.
+8.7 Trang nhà cung cấp VPS: bật Backup/Snapshot tự động hằng tuần.
+
+
+=====================================================================
+PHẦN 9 - NHẬP DỮ LIỆU THẬT & TẠO NGƯỜI DÙNG
+=====================================================================
+9.1 Nhập dữ liệu từ Excel theo thứ tự: Bộ phận -> Nhà cung cấp
+    -> Danh mục vật tư -> Tồn kho ban đầu -> Danh mục hóa chất.
+    Mỗi loại: tải file mẫu -> điền -> Kiểm tra & xem trước -> sửa lỗi
+    -> Xác nhận nhập.
+9.2 Tồn kho ban đầu tạo phiếu điều chỉnh "Chờ duyệt" -> Quản lý kho
+    (người khác người import) phê duyệt.
+9.3 Hóa chất: tải SDS/MSDS từng hóa chất -> HSE xác nhận -> nhập tồn
+    hóa chất ban đầu theo từng lô (mã lô, HSD).
+9.4 Người dùng: tạo tài khoản, gán bộ phận + vai trò. Thêm email của
+    họ vào Cloudflare Access (6.7) nếu dùng danh sách email.
+9.5 Đối chiếu kiểm kê thực tế -> Khóa kỳ kho đến ngày chốt tồn đầu kỳ.
+9.6 Đào tạo theo menu "Hướng dẫn vận hành" trong ứng dụng.
+
+
+=====================================================================
+PHẦN 10 - QUY TRÌNH VẬN HÀNH ĐỊNH KỲ (người quản trị hệ thống)
+=====================================================================
+HẰNG NGÀY (2 phút - trên giao diện web)
+ [ ] Dashboard: xem cảnh báo tồn thấp, hóa chất sắp hết hạn, phiếu chờ.
+ [ ] Sao lưu & khôi phục: có bản sao lưu đêm qua (01:30).
+
+HẰNG TUẦN (10 phút)
+ [ ] Cloudflare R2 -> bucket sambo-wms-backup: có file mới các đêm.
+ [ ] [VPS] Dung lượng ổ (cột Use% nên < 80%):
+       df -h /
+ [ ] [VPS] Ứng dụng & tunnel đang chạy (active (running)):
+       systemctl is-active sambo-wms cloudflared
+ [ ] Nhật ký hệ thống trên web: kiểm tra đăng nhập lạ, thao tác bất
+     thường.
+
+HẰNG THÁNG (30 phút)
+ [ ] [VPS] Cập nhật hệ điều hành, rồi khởi động lại ngoài giờ làm việc:
+       sudo apt update && sudo apt upgrade -y
+       sudo reboot
+     (chờ 2 phút -> mở https://wms.<ten-mien> kiểm tra)
+ [ ] Diễn tập khôi phục: trên web, Sao lưu & khôi phục -> chọn bản
+     mới nhất -> Kiểm tra toàn vẹn -> phải Đạt.
+ [ ] Rà soát người dùng: khóa tài khoản người đã nghỉ việc; gỡ email
+     khỏi Cloudflare Access.
+ [ ] Khóa kỳ kho sau khi chốt số liệu tháng với kế toán.
+
+HẰNG NĂM
+ [ ] Gia hạn tên miền, gia hạn GitHub token (Phần 4.1, rồi chạy
+     git pull và nhập token mới khi được hỏi).
+
+
+=====================================================================
+PHẦN 11 - CẬP NHẬT PHIÊN BẢN MỚI
+=====================================================================
+Làm ngoài giờ làm việc. [VPS]:
+    cd ~/sambo-wms && git pull
+    bash deploy/package.sh <phien-ban-moi>
+    sudo bash deploy/update.sh deploy/dist/sambo-wms-<phien-ban-moi>.tar.gz
+update.sh tự sao lưu trước, chỉ thêm thay đổi CSDL (không xóa dữ
+liệu), lỗi thì tự quay về bản cũ. Thấy "OK – phiên bản ... đang chạy."
+là xong.
+
+
+=====================================================================
+PHẦN 12 - LỆNH THƯỜNG DÙNG  [VPS]
+=====================================================================
+Trạng thái ứng dụng ........ sudo systemctl status sambo-wms
+Khởi động lại ứng dụng ..... sudo systemctl restart sambo-wms
+Nhật ký lỗi ứng dụng ....... sudo journalctl -u sambo-wms -n 100
+Kiểm tra sức khỏe .......... curl http://localhost:4000/api/health
+Trạng thái tunnel .......... sudo systemctl status cloudflared
+Sao lưu thủ công ........... sudo bash /opt/sambo-wms/current/deploy/backup.sh
+Danh sách bản sao lưu ...... ls -lh /var/lib/sambo-wms/backups
+Khôi phục khi sự cố ........ sudo bash /opt/sambo-wms/current/deploy/restore.sh /var/lib/sambo-wms/backups/<ten-file>.dump
+                             (gõ KHOI PHUC để xác nhận)
+Dung lượng ổ ............... df -h /
+RAM ........................ free -h
+
+
+=====================================================================
+PHẦN 13 - XỬ LÝ SỰ CỐ
+=====================================================================
+* Không SSH được ("Permission denied")
+  -> đúng người dùng (sambo@) và đúng file khóa (-i D:\sambo-vps)?
+  -> vẫn không được: dùng Console/VNC trên trang nhà cung cấp VPS.
+* Trang báo Cloudflare 502 / 1033
+  -> sudo systemctl status sambo-wms cloudflared ; khởi động lại cái
+     nào không "active (running)".
+* Đăng nhập xong bị đẩy ra
+  -> phải vào bằng https://wms.<ten-mien>, không vào bằng http://IP.
+* Báo lỗi cơ sở dữ liệu
+  -> sudo systemctl status postgresql ; sudo journalctl -u sambo-wms -n 50
+* Ổ đĩa đầy
+  -> xóa bản sao lưu cũ trong /var/lib/sambo-wms/backups (đã có trên
+     R2) hoặc nâng gói ổ đĩa VPS.
+* Cập nhật lỗi
+  -> update.sh đã tự quay về bản cũ; chụp màn hình lỗi gửi kỹ thuật.
+* Mất VPS hoàn toàn
+  -> tạo VPS mới, làm lại Phần 3-6, rồi khôi phục bản .dump mới nhất
+     tải từ R2 bằng restore.sh; file đính kèm: giải nén file
+     .uploads.tar.gz cùng thời điểm vào /var/lib/sambo-wms/uploads.
+
+Tài liệu chi tiết: https://github.com/Xichlo1234/sambo-wms (thư mục docs)
+=====================================================================
