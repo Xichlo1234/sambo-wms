@@ -1,0 +1,449 @@
+﻿=====================================================================
+   SAMBO GOLD - WAREHOUSE MANAGEMENT SYSTEM (WMS) - phiên bản 1.1
+   HƯỚNG DẪN CÀI ĐẶT HOÀN CHỈNH TRÊN MÁY WINDOWS
+   (Ubuntu/WSL2 trên ổ D + Supabase + Cloudflare - chi phí 0 đồng)
+=====================================================================
+
+Mô hình sau khi cài xong:
+
+   Người dùng (máy tính, điện thoại)
+        |  https://wms.<ten-mien-cong-ty>
+        v
+   Cloudflare (HTTPS, Tunnel, Access - chỉ nhân viên công ty vào được)
+        |
+        v
+   Máy Windows này -> Ubuntu (WSL2, nằm trên ổ D) -> ứng dụng SAMBO WMS
+        |                                                |
+        |                                                v
+        |                                    Supabase (cơ sở dữ liệu
+        |                                    PostgreSQL, Singapore)
+        v
+   Sao lưu hằng đêm -> Cloudflare R2
+
+QUY ƯỚC TRONG TÀI LIỆU
+ - [PowerShell Admin] : Start -> gõ PowerShell -> chuột phải
+                        "Run as administrator" -> Yes.
+                        Tiêu đề cửa sổ phải là
+                        "Administrator: Windows PowerShell".
+ - [Ubuntu]           : Start -> gõ Ubuntu -> Enter (cửa sổ dòng lệnh
+                        Ubuntu, dấu nhắc dạng sambo@TEN-MAY:~$ ).
+ - Mỗi dòng lệnh chép NGUYÊN 1 dòng, dán vào cửa sổ (chuột phải để
+   dán), nhấn Enter, chờ chạy xong mới chạy dòng tiếp theo.
+ - Chữ trong <...> là phần bạn phải thay bằng thông tin của mình
+   (xóa luôn dấu < >).
+ - Lệnh "sudo" sẽ hỏi mật khẩu Ubuntu; khi gõ mật khẩu không hiện
+   ký tự - đó là bình thường.
+
+DANH SÁCH CẦN GHI LẠI (điền dần trong quá trình cài, CẤT GIỮ BÍ MẬT)
+ [ ] Mật khẩu Ubuntu .................................. : __________
+ [ ] Mật khẩu cơ sở dữ liệu Supabase ................... : __________
+ [ ] Chuỗi kết nối Supabase (Session pooler) ........... : __________
+ [ ] GitHub token (github_pat_...) ..................... : __________
+ [ ] Mật khẩu admin ban đầu của SAMBO WMS .............. : __________
+ [ ] Tên miền / địa chỉ truy cập ....................... : __________
+
+
+=====================================================================
+PHẦN 1 - DỌN Ổ C (cần trống ít nhất 5 GB)
+=====================================================================
+Không tự xóa tay bất cứ thứ gì trong C:\Windows, C:\Program Files,
+C:\ProgramData.
+
+1.1 Tắt ngủ đông (giải phóng 3-8 GB)  [PowerShell Admin]
+    powercfg /h off
+
+1.2 Dọn file rác hệ thống (1-10 GB)
+    - Start -> gõ Disk Cleanup -> chọn ổ C:
+    - Bấm "Clean up system files" -> chọn lại ổ C:
+    - Tích TẤT CẢ các mục (đặc biệt Windows Update Cleanup, Delivery
+      Optimization Files, Temporary files, Recycle Bin, Previous
+      Windows installation) -> OK -> Delete Files.
+    - Xóa file tạm của người dùng  [PowerShell Admin]:
+      Remove-Item "$env:TEMP\*" -Recurse -Force -ErrorAction SilentlyContinue
+
+1.3 Chuyển bộ nhớ ảo (pagefile) sang ổ D (2-8 GB)
+    - Start -> gõ sysdm.cpl -> Enter -> tab Advanced -> Performance:
+      Settings -> tab Advanced -> Virtual memory: Change
+    - Bỏ tích "Automatically manage paging file size..."
+    - Chọn ổ C: -> chọn "No paging file" -> Set (cảnh báo bấm Yes)
+    - Chọn ổ D: -> chọn "System managed size" -> Set -> OK
+    - Khởi động lại máy.
+
+1.4 Chuyển thư mục cá nhân sang ổ D
+    Với từng thư mục Downloads, Documents, Desktop, Pictures, Videos:
+    File Explorer -> chuột phải thư mục -> Properties -> tab Location
+    -> Move -> chọn thư mục trên ổ D (vd D:\Users\Downloads) -> Apply
+    -> Yes (chuyển file cũ sang).
+
+1.5 Chuyển dữ liệu Zalo sang ổ D (thường rất nặng)
+    Zalo PC -> Cài đặt -> Dữ liệu -> Thay đổi thư mục lưu trữ
+    -> chọn D:\ZaloData. Có thể xóa ảnh/video cũ không cần.
+
+1.6 Nén Windows (khoảng 2 GB)  [PowerShell Admin]
+    compact /compactos:always
+
+1.7 Gỡ phần mềm không dùng
+    Settings -> Apps -> Installed apps -> sắp xếp theo Size -> gỡ.
+    Xóa cache trình duyệt: trong Chrome/Edge nhấn Ctrl+Shift+Delete
+    -> All time -> Cached images and files -> Clear.
+
+1.8 Kiểm tra: mở This PC, ổ C phải trống >= 5 GB mới làm tiếp.
+    (Còn thiếu: cài WizTree vào ổ D, quét ổ C để tìm thư mục nặng.)
+
+
+=====================================================================
+PHẦN 2 - CÀI UBUNTU (WSL2) VÀO Ổ D
+=====================================================================
+Yêu cầu: Windows 10 bản 21H2 trở lên hoặc Windows 11
+(kiểm tra: Start -> gõ winver -> Enter).
+
+2.1 [PowerShell Admin] - cập nhật WSL:
+    wsl --update
+
+2.2 Tạo thư mục trên ổ D:
+    mkdir D:\WSL\Ubuntu
+
+2.3 Cài Ubuntu vào ổ D:
+    wsl --install -d Ubuntu --location D:\WSL\Ubuntu
+
+    - Nếu yêu cầu khởi động lại -> khởi động lại máy.
+    - Cửa sổ Ubuntu mở ra: đặt username (chữ thường, không dấu,
+      vd: sambo) và mật khẩu (ghi vào danh sách ở đầu tài liệu).
+    - Nếu báo lỗi về virtualization: vào BIOS bật Intel VT-x
+      hoặc AMD-V (SVM), rồi làm lại 2.3.
+
+    >>> Nếu 2.3 báo lỗi "--location" không hợp lệ, làm cách thay thế:
+        a) wsl --install -d Ubuntu      (đặt username sambo + mật khẩu,
+                                          xong gõ exit)
+        b) wsl --shutdown
+        c) wsl --export Ubuntu D:\ubuntu-backup.tar
+        d) wsl --unregister Ubuntu
+        e) wsl --import Ubuntu D:\WSL\Ubuntu D:\ubuntu-backup.tar
+        f) wsl -d Ubuntu -u root -- bash -c "printf '[user]\ndefault=sambo\n[boot]\nsystemd=true\n' > /etc/wsl.conf"
+        g) wsl --shutdown
+        h) Xóa file D:\ubuntu-backup.tar
+        (thay "sambo" bằng username bạn đã đặt nếu khác)
+
+2.4 Kiểm tra  [PowerShell Admin]:
+    wsl -l -v
+    -> phải thấy Ubuntu, VERSION 2. Thư mục D:\WSL\Ubuntu có file
+       ext4.vhdx (toàn bộ Ubuntu nằm trong file này).
+
+2.5 Kiểm tra systemd  [Ubuntu]:
+    systemctl is-system-running
+    -> "running" hoặc "degraded" là ĐƯỢC.
+    -> Nếu báo "System has not been booted with systemd":
+       [Ubuntu]   printf '[boot]\nsystemd=true\n' | sudo tee -a /etc/wsl.conf
+       [PowerShell Admin]   wsl --shutdown
+       Mở lại Ubuntu, kiểm tra lại.
+
+2.6 Cập nhật Ubuntu  [Ubuntu]:
+    sudo apt update && sudo apt upgrade -y
+    sudo apt install -y git curl
+
+
+=====================================================================
+PHẦN 3 - TẠO CƠ SỞ DỮ LIỆU SUPABASE
+=====================================================================
+(Nếu đã tạo dự án "Sambo Gold" ở Singapore thì bỏ qua 3.1)
+
+3.1 https://supabase.com -> New project
+    - Project name: Sambo Gold
+    - Database password: đặt mật khẩu CHỈ gồm chữ hoa, chữ thường và
+      số, dài >= 16 ký tự (vd: SamboGold2026Kho7xQ). Ghi lại.
+    - Region: Southeast Asia (Singapore)
+    - Security: BỎ tích "Enable Data API"; BỎ tích "Automatically
+      expose new tables"; TÍCH "Enable automatic RLS".
+    - Create new project -> chờ trạng thái Healthy.
+
+3.2 KHÔNG cần tự bật extension pg_trgm - hệ thống tự tạo khi cài.
+
+3.3 Lấy chuỗi kết nối:
+    - Bấm nút Connect (đầu trang) -> mục Connection String
+      -> phần "Session pooler".
+    - Chuỗi có dạng:
+      postgresql://postgres.xxxxxxxx:[YOUR-PASSWORD]@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres
+    - Thay [YOUR-PASSWORD] (cả dấu ngoặc vuông) bằng mật khẩu 3.1.
+    - Kiểm tra: có chữ "pooler.supabase.com" và cổng ":5432".
+      KHÔNG dùng "Direct connection", KHÔNG dùng cổng 6543.
+    - Ghi vào danh sách ở đầu tài liệu.
+
+
+=====================================================================
+PHẦN 4 - LẤY MÃ NGUỒN TỪ GITHUB
+=====================================================================
+4.1 Tạo token đọc mã nguồn (repository đang để Private):
+    - Đăng nhập github.com (tài khoản Xichlo1234)
+    - Ảnh đại diện -> Settings -> Developer settings (cuối menu trái)
+      -> Personal access tokens -> Fine-grained tokens
+      -> Generate new token
+    - Token name: sambo-server ; Expiration: 1 year
+    - Repository access: Only select repositories -> sambo-wms
+    - Permissions -> Repository permissions -> Contents: Read-only
+    - Generate token -> sao chép token (github_pat_...) -> ghi lại.
+
+4.2 [Ubuntu]:
+    cd ~ && git clone https://github.com/Xichlo1234/sambo-wms.git
+    - Username: Xichlo1234
+    - Password: dán token (chuột phải để dán, không hiện ký tự) -> Enter
+
+4.3 Kiểm tra:
+    ls ~/sambo-wms
+    -> thấy các thư mục client, server, deploy, docs.
+
+
+=====================================================================
+PHẦN 5 - CÀI ĐẶT HỆ THỐNG SAMBO WMS
+=====================================================================
+5.1 [Ubuntu] - đóng gói bản cài:
+    cd ~/sambo-wms && bash deploy/package.sh 1.1.0
+
+5.2 Cài đặt (5-15 phút, tự cài Node.js 22, PostgreSQL, dịch vụ chạy nền):
+    sudo bash deploy/install.sh deploy/dist/sambo-wms-1.1.0.tar.gz
+
+    >>> Khi chạy xong, màn hình in dòng:
+        ">>> Mật khẩu admin ban đầu: xxxxxxxx"
+        GHI LẠI NGAY vào danh sách ở đầu tài liệu.
+    >>> Gần cuối phải thấy "OK – phiên bản 1.1.0 đang chạy." và "Hoàn tất."
+
+5.3 Kiểm tra:
+    curl http://localhost:4000/api/health
+    -> có chữ "status":"ok"
+
+
+=====================================================================
+PHẦN 6 - CHUYỂN CƠ SỞ DỮ LIỆU SANG SUPABASE
+=====================================================================
+6.1 [Ubuntu] - ghi chuỗi Supabase vào cấu hình. Thay <CHUOI_SUPABASE>
+    bằng chuỗi ở 3.3, GIỮ NGUYÊN 2 dấu nháy đơn:
+    sudo sed -i "s#^DATABASE_URL=.*#DATABASE_URL='<CHUOI_SUPABASE>'#" /opt/sambo-wms/shared/.env
+
+    Kiểm tra (phải thấy chuỗi pooler.supabase.com):
+    sudo grep DATABASE_URL /opt/sambo-wms/shared/.env
+
+6.2 Tạo bảng và dữ liệu ban đầu trên Supabase (mật khẩu admin vẫn là
+    mật khẩu đã ghi ở 5.2):
+    cd /opt/sambo-wms/current/server && sudo -u wms bash -c 'set -a; . /opt/sambo-wms/shared/.env; set +a; npx prisma migrate deploy && npx tsx prisma/seed.ts'
+
+    -> phải thấy "All migrations have been successfully applied"
+       và "Seed hoàn tất".
+
+6.3 Cài công cụ sao lưu đúng phiên bản Supabase.
+    Xem phiên bản trên Supabase: Project Settings -> Infrastructure
+    (thường là 17; nếu là 15 thì thay số 17 bằng 15 ở 2 lệnh dưới).
+    sudo apt install -y postgresql-common && sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+    sudo apt install -y postgresql-client-17
+    sudo sed -i 's#^PG_BIN_DIR=.*#PG_BIN_DIR=/usr/lib/postgresql/17/bin#' /opt/sambo-wms/shared/.env
+
+6.4 Khởi động lại và kiểm tra:
+    sudo systemctl restart sambo-wms && sleep 5 && curl http://localhost:4000/api/health
+
+6.5 Tắt cơ sở dữ liệu nội bộ không còn dùng (tiết kiệm RAM):
+    sudo systemctl disable --now postgresql
+
+6.6 Khóa truy cập công khai trên Supabase:
+    Supabase -> SQL Editor -> New query -> dán 3 dòng -> Run:
+    REVOKE ALL ON ALL TABLES IN SCHEMA public FROM anon, authenticated;
+    REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM anon, authenticated;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM anon, authenticated;
+
+    Kiểm tra: Supabase -> Table Editor thấy các bảng items,
+    chemical_batches, purchase_orders...
+
+
+=====================================================================
+PHẦN 7 - ĐĂNG NHẬP LẦN ĐẦU & CẤU HÌNH
+=====================================================================
+7.1 Mở trình duyệt trên Windows: http://localhost:4000
+7.2 Đăng nhập: admin / mật khẩu ở 5.2 -> hệ thống bắt đổi mật khẩu
+    (>= 8 ký tự, có chữ và số). Ghi lại mật khẩu mới.
+7.3 Menu Cấu hình hệ thống:
+    - Tab "Cấu hình chung": tên công ty, địa chỉ; "Chính sách kho
+      hóa chất & mua hàng" (giữ mặc định nếu chưa có quy định khác).
+    - Tab Kho: kiểm tra "Kho tổng – Mỏ" (Kho mỏ) và "Kho hóa chất".
+    - Tab Vị trí lưu kho: thêm vị trí cho cả 2 kho
+      (vd A-01, A-02... và HC-A1, HC-B1...).
+    - Tab Nhóm vật tư, Đơn vị tính: bổ sung theo thực tế.
+7.4 Menu Sao lưu & khôi phục -> "Sao lưu ngay" -> biểu tượng khiên
+    "Kiểm tra toàn vẹn" -> phải báo Đạt.
+
+
+=====================================================================
+PHẦN 8 - ĐƯA RA INTERNET BẰNG CLOUDFLARE TUNNEL
+=====================================================================
+Yêu cầu: có tên miền đã thêm vào Cloudflare (gói Free).
+(Chưa có: dash.cloudflare.com -> Add a site -> chọn Free -> đổi
+nameserver tại nơi mua tên miền -> chờ Cloudflare báo Active.)
+
+8.1 dash.cloudflare.com -> Zero Trust -> Networks -> Tunnels
+    -> Create a tunnel -> chọn Cloudflared -> tên: sambo-wms -> Save.
+8.2 Chọn môi trường: Debian, 64-bit. Cloudflare hiện các lệnh cài.
+    Chép và chạy TỪNG lệnh trong cửa sổ [Ubuntu]. Lệnh cuối có dạng:
+    sudo cloudflared service install eyJhIjoi.....
+    -> Trên trang Cloudflare, Connector chuyển "Connected" là được.
+8.3 Bấm Next -> Public Hostname:
+    - Subdomain: wms
+    - Domain: <ten-mien-cong-ty>
+    - Service Type: HTTP ; URL: localhost:4000
+    -> Save tunnel.
+8.4 [Ubuntu] - bật cookie bảo mật HTTPS:
+    sudo sed -i 's/^COOKIE_SECURE=.*/COOKIE_SECURE=true/' /opt/sambo-wms/shared/.env && sudo systemctl restart sambo-wms
+8.5 Mở https://wms.<ten-mien-cong-ty> (thử cả trên điện thoại dùng 4G)
+    -> đăng nhập được là XONG.
+    LƯU Ý: từ đây luôn dùng địa chỉ https://wms... (vào bằng
+    http://localhost:4000 sẽ không giữ được đăng nhập).
+
+8.6 Chỉ cho nhân viên công ty vào (khuyến nghị, miễn phí <= 50 người):
+    Zero Trust -> Access -> Applications -> Add an application
+    -> Self-hosted -> Application domain: wms.<ten-mien-cong-ty>
+    -> Add policy: Action = Allow ; Include = Emails ending in
+       @<ten-mien-email-cong-ty>  (hoặc "Emails" và nhập từng email)
+    -> Save. Người dùng sẽ nhận mã qua email trước khi tới trang
+       đăng nhập SAMBO WMS.
+
+
+=====================================================================
+PHẦN 9 - SAO LƯU NGOÀI SITE LÊN CLOUDFLARE R2 (miễn phí 10 GB)
+=====================================================================
+9.1 Cloudflare -> R2 Object Storage (lần đầu cần bật R2, gói Free)
+    -> Create bucket: sambo-wms-backup
+9.2 R2 -> Manage API tokens -> Create API token
+    -> Permissions: Object Read & Write -> Apply to: sambo-wms-backup
+    -> Create. Ghi lại: Access Key ID, Secret Access Key, Endpoint
+    (dạng https://<id>.r2.cloudflarestorage.com).
+9.3 [Ubuntu]:
+    sudo apt install -y rclone
+    sudo rclone config
+    Trả lời lần lượt:
+      n                      (New remote)
+      name> r2
+      Storage> s3            (gõ s3 hoặc số tương ứng "Amazon S3...")
+      provider> Cloudflare
+      env_auth> (Enter)
+      access_key_id> <Access Key ID>
+      secret_access_key> <Secret Access Key>
+      region> (Enter)
+      endpoint> <Endpoint>
+      các câu còn lại: Enter ; cuối cùng: y (Yes this is OK) ; q (Quit)
+9.4 Thử sao lưu và đẩy lên R2 ngay:
+    sudo R2_REMOTE=r2:sambo-wms-backup bash /opt/sambo-wms/current/deploy/backup.sh
+    -> thấy "Kiểm tra toàn vẹn: OK" và "Đã đồng bộ lên r2:..."
+9.5 Đặt lịch tự động 2 giờ sáng hằng ngày:
+    echo '0 2 * * * root R2_REMOTE=r2:sambo-wms-backup bash /opt/sambo-wms/current/deploy/backup.sh' | sudo tee /etc/cron.d/sambo-wms-r2
+9.6 Trên Cloudflare: bucket sambo-wms-backup -> Settings
+    -> Object lifecycle rules -> xóa file cũ hơn 90 ngày.
+(Sao lưu hằng đêm cũng giữ dự án Supabase luôn hoạt động, không bị
+ tạm dừng do "không hoạt động".)
+
+
+=====================================================================
+PHẦN 10 - GIỮ HỆ THỐNG LUÔN CHẠY TRÊN MÁY WINDOWS
+=====================================================================
+10.1 Không cho máy ngủ: Settings -> System -> Power (& battery)
+     -> Screen and sleep -> "When plugged in, put my device to sleep
+     after" = Never.
+10.2 Không cho WSL tự tắt khi rảnh: mở Notepad, gõ đúng 2 dòng:
+        [wsl2]
+        vmIdleTimeout=-1
+     File -> Save As -> Save as type: All files (*.*)
+     -> File name: C:\Users\<ten-tai-khoan-windows>\.wslconfig -> Save
+     (ví dụ tài khoản "HOANG ANH": C:\Users\HOANG ANH\.wslconfig)
+10.3 Tự chạy khi đăng nhập Windows:
+     Start -> gõ Task Scheduler -> Create Task (bên phải)
+     - Tab General: Name = SAMBO WMS ; chọn "Run only when user is
+       logged on"
+     - Tab Triggers: New -> Begin the task: At log on -> OK
+     - Tab Actions: New -> Program/script:
+           C:\Windows\System32\wsl.exe
+       Add arguments:
+           -d Ubuntu --exec sleep infinity
+       -> OK
+     - Tab Conditions: BỎ tích "Start the task only if the computer is
+       on AC power"
+     - Tab Settings: BỎ tích "Stop the task if it runs longer than"
+     -> OK
+10.4 Windows Update -> Advanced options -> Active hours: đặt theo giờ
+     làm việc để máy không tự khởi động lại trong giờ làm việc.
+10.5 Kiểm tra: khởi động lại máy -> đăng nhập Windows -> chờ 1-2 phút
+     -> mở https://wms.<ten-mien-cong-ty> trên điện thoại (4G).
+LƯU Ý: máy phải BẬT và ĐÃ ĐĂNG NHẬP Windows thì hệ thống mới chạy.
+Khi vận hành chính thức, nên chuyển sang mini-PC cài Ubuntu hoặc VPS:
+cài lại Phần 4-5, trỏ cùng Supabase (Phần 6.1-6.4) - không mất dữ liệu.
+
+
+=====================================================================
+PHẦN 11 - NHẬP DỮ LIỆU THẬT & TẠO NGƯỜI DÙNG
+=====================================================================
+11.1 Menu "Nhập dữ liệu từ Excel" - làm theo thứ tự:
+     Bộ phận -> Nhà cung cấp -> Danh mục vật tư -> Tồn kho ban đầu
+     -> Danh mục hóa chất.
+     Mỗi loại: Tải file Excel mẫu -> điền -> "Kiểm tra & xem trước"
+     -> sửa dòng lỗi -> "Xác nhận nhập".
+11.2 Tồn kho ban đầu tạo phiếu điều chỉnh "Chờ duyệt" - Quản lý kho
+     (người khác người import) vào Điều chỉnh tồn kho để phê duyệt.
+11.3 Hóa chất: tại hồ sơ từng hóa chất tải SDS/MSDS -> HSE xác nhận
+     -> nhập tồn hóa chất ban đầu bằng "Nhập hóa chất" theo từng lô
+     (đủ mã lô, hạn sử dụng).
+11.4 Menu Người dùng: tạo tài khoản, gán bộ phận và vai trò (Thủ kho,
+     Quản lý kho, Thủ kho hóa chất, HSE, Mua hàng, Kế toán, Giám đốc,
+     Bộ phận sử dụng). Người dùng đổi mật khẩu khi đăng nhập lần đầu.
+11.5 Đối chiếu với kiểm kê thực tế -> Cấu hình -> Khóa kỳ kho đến
+     ngày chốt tồn đầu kỳ.
+11.6 Đào tạo theo menu "Hướng dẫn vận hành" trong ứng dụng.
+
+
+=====================================================================
+PHẦN 12 - CẬP NHẬT PHIÊN BẢN MỚI (sau này)
+=====================================================================
+[Ubuntu]:
+    cd ~/sambo-wms && git pull
+    bash deploy/package.sh <phien-ban-moi>
+    sudo bash deploy/update.sh deploy/dist/sambo-wms-<phien-ban-moi>.tar.gz
+(git pull có thể hỏi Username/Password: Xichlo1234 / token ở 4.1)
+update.sh tự sao lưu, áp thay đổi cơ sở dữ liệu mới (không xóa dữ
+liệu), tự quay về bản cũ nếu lỗi. Cloudflare, Supabase giữ nguyên.
+
+
+=====================================================================
+PHẦN 13 - LỆNH VẬN HÀNH THƯỜNG DÙNG  [Ubuntu]
+=====================================================================
+Xem trạng thái ứng dụng ..... sudo systemctl status sambo-wms
+Khởi động lại ứng dụng ...... sudo systemctl restart sambo-wms
+Xem nhật ký lỗi ............. sudo journalctl -u sambo-wms -n 100
+Kiểm tra sức khỏe ........... curl http://localhost:4000/api/health
+Trạng thái Cloudflare Tunnel  sudo systemctl status cloudflared
+Sao lưu thủ công ............ sudo bash /opt/sambo-wms/current/deploy/backup.sh
+Danh sách bản sao lưu ....... ls -lh /var/lib/sambo-wms/backups
+Khôi phục khi sự cố ......... sudo bash /opt/sambo-wms/current/deploy/restore.sh /var/lib/sambo-wms/backups/<ten-file>.dump
+Xem cấu hình ................ sudo cat /opt/sambo-wms/shared/.env
+
+
+=====================================================================
+PHẦN 14 - XỬ LÝ SỰ CỐ THƯỜNG GẶP
+=====================================================================
+* wsl --install báo "Invalid distribution name"
+  -> chạy: wsl --list --online ; dùng đúng tên trong danh sách.
+* WSL báo lỗi virtualization
+  -> bật Intel VT-x / AMD-V trong BIOS; Windows Features bật
+     "Virtual Machine Platform".
+* curl .../api/health không trả về "ok"
+  -> sudo journalctl -u sambo-wms -n 50 (thường sai DATABASE_URL).
+* Lỗi kết nối Supabase
+  -> dùng đúng Session pooler cổng 5432; mật khẩu có ký tự đặc biệt
+     phải đặt lại chỉ chữ+số; kiểm tra dự án Supabase có bị Paused
+     không (bấm Restore project).
+* Đăng nhập xong bị đẩy ra ngay
+  -> đang vào bằng http:// trong khi đã bật COOKIE_SECURE=true
+     -> dùng https://wms.<ten-mien>.
+* Trang Cloudflare báo lỗi 502 / 1033
+  -> ứng dụng hoặc tunnel chưa chạy: sudo systemctl status sambo-wms
+     và sudo systemctl status cloudflared ; máy Windows có đang bật
+     và đã đăng nhập không.
+* Sao lưu báo lỗi phiên bản pg_dump
+  -> làm lại 6.3 đúng phiên bản Supabase.
+* Hết dung lượng ổ D
+  -> xóa bản sao lưu cũ trong /var/lib/sambo-wms/backups (đã có bản
+     trên R2).
+
+Tài liệu chi tiết: https://github.com/Xichlo1234/sambo-wms (thư mục docs)
+=====================================================================
