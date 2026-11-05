@@ -203,10 +203,14 @@ bash deploy/package.sh <phiên-bản> && sudo bash deploy/update.sh deploy/dist/
 Windows 10 (bản 21H2 trở lên) hoặc Windows 11 chạy được Ubuntu bên trong bằng WSL2 – các lệnh trong tài liệu dùng nguyên vẹn.
 
 ### A1. Cài Ubuntu
-1. Bấm Start → gõ `PowerShell` → chuột phải **Run as administrator**:
+1. Bấm Start → gõ `PowerShell` → chuột phải **Run as administrator** (tiêu đề cửa sổ phải là *Administrator: Windows PowerShell*):
    ```powershell
-   wsl --install -d Ubuntu-24.04
+   wsl --update
    ```
+   ```powershell
+   wsl --install -d Ubuntu
+   ```
+   Tên `Ubuntu` luôn có và cài bản LTS mới nhất. Nếu báo *Invalid distribution name*, chạy `wsl --list --online` và chọn tên trong danh sách.
 2. Khởi động lại máy khi được yêu cầu. Sau khi khởi động, cửa sổ Ubuntu tự mở → đặt **username** (chữ thường, không dấu, vd `sambo`) và **mật khẩu** (dùng cho lệnh `sudo`, gõ không hiện ký tự – bình thường).
    - Nếu báo lỗi *virtualization*: vào BIOS bật **Intel VT-x / AMD-V (SVM)**, hoặc trong Windows bật tính năng *Virtual Machine Platform*.
 3. Lần sau mở Ubuntu: Start → gõ `Ubuntu` → Enter.
@@ -238,7 +242,7 @@ WSL tắt khi máy tắt/ngủ hoặc không còn cửa sổ Ubuntu nào. Thiế
 3. **Tự khởi động khi đăng nhập Windows**: Start → *Task Scheduler* → **Create Task**:
    - General: tên `SAMBO WMS`, chọn *Run only when user is logged on*.
    - Triggers: **At log on**.
-   - Actions: Program `C:\Windows\System32\wsl.exe`, Arguments: `-d Ubuntu-24.04 --exec sleep infinity`
+   - Actions: Program `C:\Windows\System32\wsl.exe`, Arguments: `-d Ubuntu --exec sleep infinity` (dùng đúng tên bản đã cài – xem bằng `wsl -l -v`)
    - Conditions: bỏ tích *Start the task only if the computer is on AC power*.
 4. Bật **tự đăng nhập Windows** sau khi khởi động lại (hoặc đăng nhập thủ công sau mỗi lần cập nhật Windows).
 5. Đặt lịch cập nhật Windows ngoài giờ làm việc (Settings → Windows Update → *Active hours*).
