@@ -1,0 +1,333 @@
+﻿=====================================================================
+   SAMBO GOLD - WAREHOUSE MANAGEMENT SYSTEM (WMS) - phiên bản 1.1
+   HƯỚNG DẪN CÀI ĐẶT TRÊN ORACLE CLOUD (ALWAYS FREE) - 0 ĐỒNG
+   Máy chủ Ubuntu 24.04 (ARM, 2 lõi, 12 GB RAM) + PostgreSQL ngay trên
+   máy chủ + Cloudflare (HTTPS, Tunnel, Access, sao lưu R2)
+=====================================================================
+
+MÔ HÌNH
+   Người dùng -> https://wms.<ten-mien> -> Cloudflare (Access: chỉ
+   email công ty) -> Tunnel -> Máy chủ Oracle (SAMBO WMS + PostgreSQL)
+                                   |
+                                   +-> sao lưu hằng đêm -> Cloudflare R2
+
+ - Máy Windows chỉ dùng để gõ lệnh điều khiển (SSH), KHÔNG dùng ổ C,
+   tắt máy Windows thì hệ thống vẫn chạy.
+ - CSDL PostgreSQL nằm ngay trên máy chủ Oracle -> KHÔNG cần Supabase
+   (dự án Supabase đã tạo có thể để đó hoặc xóa).
+
+CẦN CHUẨN BỊ
+ - Thẻ Visa/Mastercard (ghi nợ quốc tế được) để Oracle xác minh - chỉ
+   tạm giữ khoảng 1 USD rồi hoàn lại.
+ - Email, số điện thoại nhận SMS.
+ - Tên miền đã thêm vào Cloudflare (hoặc mua ở Phần 6).
+
+QUY ƯỚC
+ - [PowerShell] : Start -> gõ PowerShell -> Enter (không cần Admin).
+ - [Máy chủ]    : cửa sổ PowerShell đã SSH vào máy chủ Oracle
+                  (dấu nhắc dạng ubuntu@sambo-wms:~$ ).
+ - Mỗi lệnh chép NGUYÊN 1 dòng, dán (chuột phải), Enter, chờ xong.
+ - <...> là phần phải thay bằng thông tin của bạn (xóa luôn dấu < >).
+
+DANH SÁCH CẦN GHI LẠI (CẤT GIỮ BÍ MẬT, không gửi qua chat/email)
+ [ ] Tài khoản Oracle Cloud (email, mật khẩu, Cloud Account Name) : ____
+ [ ] Public IP của máy chủ ................................. : __________
+ [ ] File khóa SSH D:\sambo-oracle (+ bản sao trên USB) .... : __________
+ [ ] GitHub token (github_pat_...) ......................... : __________
+ [ ] Mật khẩu admin ban đầu SAMBO WMS ...................... : __________
+ [ ] Địa chỉ truy cập https://wms.<ten-mien> ............... : __________
+ [ ] R2 Access Key ID / Secret / Endpoint .................. : __________
+
+
+=====================================================================
+PHẦN 1 - ĐĂNG KÝ ORACLE CLOUD
+=====================================================================
+1.1 Vào https://www.oracle.com/cloud/free -> Start for free.
+1.2 Điền thông tin:
+    - Country: Vietnam ; Account type: Company (hoặc Individual)
+    - Cloud Account Name: vd samboGold (ghi lại - dùng khi đăng nhập)
+    - Home Region: Singapore   <<< CHỌN KỸ, SAU NÀY KHÔNG ĐỔI ĐƯỢC
+    - Xác minh email, số điện thoại, nhập thẻ.
+1.3 Chờ email "Your account is ready" (vài phút đến vài giờ).
+1.4 Đăng nhập https://cloud.oracle.com -> nhập Cloud Account Name
+    -> email + mật khẩu. Bật xác thực 2 lớp khi được hỏi
+    (cài Oracle Mobile Authenticator hoặc Google Authenticator).
+
+1.5 (RẤT NÊN LÀM) Nâng tài khoản lên "Pay As You Go":
+    Menu (3 gạch) -> Billing & Cost Management -> Upgrade and Manage
+    Payment -> Upgrade to Pay As You Go.
+    Vì sao:
+    - Tài khoản Free có thể bị Oracle THU HỒI máy chủ khi máy chạy nhẹ
+      (CPU, RAM, mạng đều thấp) suốt 7 ngày - hệ thống kho thường chạy
+      nhẹ nên dễ dính. Pay As You Go KHÔNG bị thu hồi kiểu này.
+    - Dễ tạo được máy chủ ARM hơn (ít gặp "Out of capacity").
+    - Vẫn 0 đồng nếu chỉ dùng tài nguyên có nhãn "Always Free".
+1.6 Đặt cảnh báo chi phí để chắc chắn không bị tính tiền:
+    Billing & Cost Management -> Budgets -> Create Budget
+    -> Amount: 1 (USD) -> Alert: 1% actual spend -> email của bạn
+    -> Create. Có phát sinh dù 1 xu là nhận email ngay.
+
+
+=====================================================================
+PHẦN 2 - TẠO KHÓA SSH TRÊN MÁY WINDOWS (lưu ổ D)
+=====================================================================
+2.1 [PowerShell]:
+    ssh-keygen -t ed25519 -f D:\sambo-oracle -C sambo-oracle
+    -> passphrase: đặt mật khẩu cho khóa hoặc Enter để bỏ qua.
+2.2 Đặt quyền riêng tư cho khóa:
+    icacls D:\sambo-oracle /inheritance:r /grant:r "$($env:USERNAME):R"
+2.3 Hiện khóa công khai:
+    Get-Content D:\sambo-oracle.pub
+    -> sao chép NGUYÊN dòng bắt đầu bằng ssh-ed25519 ...
+2.4 Chép 2 file D:\sambo-oracle và D:\sambo-oracle.pub vào USB.
+
+
+=====================================================================
+PHẦN 3 - TẠO MÁY CHỦ (INSTANCE)
+=====================================================================
+3.1 Menu -> Compute -> Instances -> Create instance.
+3.2 Name: sambo-wms
+3.3 Image and shape -> Edit:
+    - Change image -> Ubuntu -> Canonical Ubuntu 24.04 (KHÔNG chọn
+      bản "Minimal") -> Select image.
+    - Change shape -> Ampere -> VM.Standard.A1.Flex
+      -> Number of OCPUs: 2 ; Amount of memory (GB): 12 -> Select shape.
+    - Phải thấy nhãn "Always Free-eligible".
+3.4 Networking: giữ mặc định (Create new virtual cloud network, Assign
+    a public IPv4 address = Yes).
+3.5 Add SSH keys -> Paste public keys -> dán dòng ssh-ed25519 ... (2.3)
+3.6 Boot volume -> tích "Specify a custom boot volume size" -> 100 GB
+    (Always Free cho tổng 200 GB).
+3.7 Create. Chờ trạng thái RUNNING (1-3 phút) -> ghi lại Public IP
+    address.
+
+>>> Báo "Out of capacity for shape VM.Standard.A1.Flex":
+    - Đổi Placement -> Availability domain khác (AD-1/2/3) rồi thử lại.
+    - Thử lại vào sáng sớm/đêm khuya, hoặc vài giờ sau.
+    - Làm bước 1.5 (Pay As You Go) - thường hết lỗi này.
+    - Tạm thời có thể chọn 1 OCPU / 6 GB rồi tăng lên sau
+      (Instance -> Edit -> Edit shape).
+
+
+=====================================================================
+PHẦN 4 - KẾT NỐI & CHUẨN BỊ MÁY CHỦ
+=====================================================================
+4.1 [PowerShell] (lần đầu hỏi yes/no -> gõ yes):
+    ssh -i D:\sambo-oracle ubuntu@<Public-IP>
+    -> thấy dấu nhắc ubuntu@sambo-wms:~$ là đã vào máy chủ.
+
+4.2 [Máy chủ] - cập nhật hệ thống (có màn hình tím hỏi thì Enter):
+    sudo apt update && sudo apt upgrade -y
+
+4.3 Múi giờ Việt Nam:
+    sudo timedatectl set-timezone Asia/Ho_Chi_Minh
+
+4.4 Tự cài bản vá bảo mật, chặn dò mật khẩu, công cụ cần thiết:
+    sudo apt install -y unattended-upgrades fail2ban git curl
+    sudo dpkg-reconfigure -plow unattended-upgrades
+    -> chọn Yes.
+
+4.5 TƯỜNG LỬA: KHÔNG bật ufw trên Oracle (xung đột với tường lửa có
+    sẵn của Oracle). Mặc định Oracle chỉ mở cổng SSH 22 - đúng như cần,
+    KHÔNG mở thêm cổng 80/443/4000 (web đi qua Cloudflare Tunnel).
+
+4.6 Khởi động lại để áp bản vá kernel:
+    sudo reboot
+    -> chờ 1 phút -> [PowerShell] ssh -i D:\sambo-oracle ubuntu@<Public-IP>
+
+
+=====================================================================
+PHẦN 5 - CÀI ĐẶT SAMBO WMS
+=====================================================================
+5.1 Tạo GitHub token (nếu chưa có): github.com -> ảnh đại diện
+    -> Settings -> Developer settings -> Personal access tokens
+    -> Fine-grained tokens -> Generate new token
+    - Token name: sambo-oracle ; Expiration: 1 year
+    - Repository access: Only select repositories -> sambo-wms
+    - Repository permissions -> Contents: Read-only -> Generate
+    -> sao chép token (github_pat_...) -> ghi lại.
+
+5.2 [Máy chủ] - tải mã nguồn:
+    cd ~ && git clone https://github.com/Xichlo1234/sambo-wms.git
+    - Username: Xichlo1234
+    - Password: dán token (không hiện ký tự) -> Enter
+    git -C ~/sambo-wms config credential.helper store
+
+5.3 Đóng gói:
+    cd ~/sambo-wms && bash deploy/package.sh 1.1.0
+
+5.4 Cài đặt (10-20 phút; tự cài Node.js 22, PostgreSQL 16, tạo CSDL,
+    dịch vụ chạy nền, sao lưu tự động 01:30 hằng đêm):
+    sudo bash deploy/install.sh deploy/dist/sambo-wms-1.1.0.tar.gz
+
+    >>> Màn hình in: ">>> Mật khẩu admin ban đầu: xxxxxxxx"
+        GHI LẠI NGAY.
+    >>> Gần cuối phải thấy "OK – phiên bản 1.1.0 đang chạy." và
+        "Hoàn tất."
+    >>> Nếu báo lỗi: chụp màn hình gửi kỹ thuật (máy chủ Oracle dùng
+        chip ARM - bản cài chưa được chạy thử trên ARM).
+
+5.5 Kiểm tra:
+    curl http://localhost:4000/api/health
+    -> có "status":"ok"
+
+
+=====================================================================
+PHẦN 6 - TÊN MIỀN & CLOUDFLARE TUNNEL
+=====================================================================
+6.1 Chưa có tên miền trên Cloudflare:
+    dash.cloudflare.com -> đăng ký -> Add a site -> nhập tên miền
+    -> gói Free -> đổi nameserver tại nơi mua tên miền theo 2 địa chỉ
+    Cloudflare đưa -> chờ báo Active.
+    (Hoặc mua .com ngay tại Cloudflare: Domain Registration ->
+     Register Domains - khoảng 10-11 USD/năm.)
+
+6.2 Zero Trust -> Networks -> Tunnels -> Create a tunnel -> Cloudflared
+    -> tên: sambo-wms -> Save tunnel.
+6.3 Chọn hệ điều hành Debian, kiến trúc arm64-bit (máy chủ Oracle
+    là ARM - KHÔNG chọn 64-bit/amd64) -> chép và chạy TỪNG lệnh
+    Cloudflare hiện ra trong cửa sổ [Máy chủ]. Lệnh cuối dạng:
+    sudo cloudflared service install eyJhIjoi.....
+    -> Connector chuyển "Connected".
+6.4 Next -> Public Hostname:
+    Subdomain: wms ; Domain: <ten-mien> ; Type: HTTP ; URL: localhost:4000
+    -> Save tunnel.
+6.5 [Máy chủ] - bật cookie bảo mật HTTPS:
+    sudo sed -i 's/^COOKIE_SECURE=.*/COOKIE_SECURE=true/' /opt/sambo-wms/shared/.env && sudo systemctl restart sambo-wms
+6.6 Mở https://wms.<ten-mien> trên máy tính và điện thoại (4G).
+
+6.7 Chỉ cho nhân viên vào (BẮT BUỘC khi vận hành thật):
+    Zero Trust -> Access -> Applications -> Add an application
+    -> Self-hosted -> Application domain: wms.<ten-mien>
+    -> Policy: Allow ; Include: Emails ending in @<email-cong-ty>
+       (hoặc "Emails" và nhập từng email) -> Save.
+
+
+=====================================================================
+PHẦN 7 - ĐĂNG NHẬP LẦN ĐẦU & CẤU HÌNH
+=====================================================================
+7.1 https://wms.<ten-mien> -> admin / mật khẩu ở 5.4 -> đổi mật khẩu.
+7.2 Cấu hình hệ thống: tên công ty, địa chỉ; chính sách kho hóa chất &
+    mua hàng; kiểm tra Kho tổng – Mỏ và Kho hóa chất; thêm Vị trí lưu
+    kho, Nhóm vật tư, Đơn vị tính.
+7.3 Sao lưu & khôi phục -> Sao lưu ngay -> Kiểm tra toàn vẹn -> Đạt.
+
+
+=====================================================================
+PHẦN 8 - SAO LƯU
+=====================================================================
+A. Sao lưu ra ngoài lên Cloudflare R2 (10 GB miễn phí)
+8.1 Cloudflare -> R2 Object Storage -> Create bucket: sambo-wms-backup
+8.2 R2 -> Manage API tokens -> Create API token -> Object Read & Write
+    -> chỉ bucket sambo-wms-backup -> ghi lại Access Key ID, Secret
+    Access Key, Endpoint.
+8.3 [Máy chủ]:
+    sudo apt install -y rclone
+    sudo rclone config
+      n -> name: r2 -> Storage: s3 -> provider: Cloudflare
+      -> env_auth: Enter -> access_key_id / secret_access_key: dán
+      -> region: Enter -> endpoint: dán -> còn lại Enter -> y -> q
+8.4 Thử ngay:
+    sudo R2_REMOTE=r2:sambo-wms-backup bash /opt/sambo-wms/current/deploy/backup.sh
+    -> "Kiểm tra toàn vẹn: OK" và "Đã đồng bộ lên r2:sambo-wms-backup"
+8.5 Lịch tự động 02:00 hằng đêm:
+    echo '0 2 * * * root R2_REMOTE=r2:sambo-wms-backup bash /opt/sambo-wms/current/deploy/backup.sh' | sudo tee /etc/cron.d/sambo-wms-r2
+8.6 R2 bucket -> Settings -> Object lifecycle rules -> xóa file > 90 ngày.
+
+B. Sao lưu toàn bộ máy chủ trên Oracle (miễn phí tối đa 5 bản)
+8.7 Oracle: Compute -> Instances -> sambo-wms -> Boot volume -> bấm
+    tên boot volume -> Boot volume backups -> Create boot volume backup
+    -> tên: truoc-van-hanh -> Full -> Create.
+    Làm lại trước mỗi lần cập nhật lớn; xóa bản cũ để giữ <= 5 bản.
+
+
+=====================================================================
+PHẦN 9 - NHẬP DỮ LIỆU THẬT & NGƯỜI DÙNG
+=====================================================================
+9.1 Nhập dữ liệu từ Excel theo thứ tự: Bộ phận -> Nhà cung cấp
+    -> Danh mục vật tư -> Tồn kho ban đầu -> Danh mục hóa chất
+    (tải mẫu -> điền -> Kiểm tra & xem trước -> sửa lỗi -> Xác nhận).
+9.2 Tồn kho ban đầu -> Quản lý kho (khác người import) phê duyệt.
+9.3 Hóa chất: tải SDS/MSDS -> HSE xác nhận -> nhập tồn theo lô.
+9.4 Tạo người dùng, gán bộ phận + vai trò; thêm email vào Access (6.7).
+9.5 Đối chiếu kiểm kê thực tế -> Khóa kỳ kho đến ngày chốt tồn đầu kỳ.
+9.6 Đào tạo theo menu "Hướng dẫn vận hành" trong ứng dụng.
+
+
+=====================================================================
+PHẦN 10 - QUY TRÌNH VẬN HÀNH ĐỊNH KỲ
+=====================================================================
+HẰNG NGÀY (web, 2 phút)
+ [ ] Dashboard: cảnh báo tồn thấp, hóa chất sắp hết hạn, phiếu chờ.
+ [ ] Sao lưu & khôi phục: có bản sao lưu đêm qua.
+HẰNG TUẦN (10 phút)
+ [ ] Cloudflare R2: có file mới các đêm.
+ [ ] [Máy chủ] df -h /                 (Use% nên < 80%)
+ [ ] [Máy chủ] systemctl is-active sambo-wms cloudflared postgresql
+     (cả 3 dòng: active)
+ [ ] Email Oracle: không có cảnh báo chi phí / thu hồi máy chủ.
+HẰNG THÁNG (30 phút, ngoài giờ làm việc)
+ [ ] [Máy chủ] sudo apt update && sudo apt upgrade -y
+     rồi: sudo reboot  (chờ 2 phút, mở web kiểm tra)
+ [ ] Web: Sao lưu & khôi phục -> bản mới nhất -> Kiểm tra toàn vẹn.
+ [ ] Khóa tài khoản người nghỉ việc, gỡ email khỏi Cloudflare Access.
+ [ ] Khóa kỳ kho sau khi chốt số liệu với kế toán.
+HẰNG NĂM
+ [ ] Gia hạn tên miền; tạo GitHub token mới (5.1) khi token hết hạn.
+
+
+=====================================================================
+PHẦN 11 - CẬP NHẬT PHIÊN BẢN MỚI
+=====================================================================
+Ngoài giờ làm việc. Nên tạo boot volume backup (8.7) trước. [Máy chủ]:
+    cd ~/sambo-wms && git pull
+    bash deploy/package.sh <phien-ban-moi>
+    sudo bash deploy/update.sh deploy/dist/sambo-wms-<phien-ban-moi>.tar.gz
+update.sh tự sao lưu CSDL, chỉ thêm thay đổi (không xóa dữ liệu), lỗi
+thì tự quay về bản cũ. Thấy "OK – phiên bản ... đang chạy." là xong.
+
+
+=====================================================================
+PHẦN 12 - LỆNH THƯỜNG DÙNG  [Máy chủ]
+=====================================================================
+Kết nối từ Windows ......... ssh -i D:\sambo-oracle ubuntu@<Public-IP>
+Trạng thái ứng dụng ........ sudo systemctl status sambo-wms
+Khởi động lại ứng dụng ..... sudo systemctl restart sambo-wms
+Nhật ký lỗi ứng dụng ....... sudo journalctl -u sambo-wms -n 100
+Kiểm tra sức khỏe .......... curl http://localhost:4000/api/health
+Trạng thái tunnel .......... sudo systemctl status cloudflared
+Sao lưu thủ công ........... sudo bash /opt/sambo-wms/current/deploy/backup.sh
+Danh sách bản sao lưu ...... ls -lh /var/lib/sambo-wms/backups
+Khôi phục khi sự cố ........ sudo bash /opt/sambo-wms/current/deploy/restore.sh /var/lib/sambo-wms/backups/<ten-file>.dump
+                             (gõ KHOI PHUC để xác nhận)
+Dung lượng / RAM ........... df -h /   ;   free -h
+
+
+=====================================================================
+PHẦN 13 - XỬ LÝ SỰ CỐ
+=====================================================================
+* "Out of capacity" khi tạo máy chủ -> xem cuối Phần 3.
+* SSH báo "Permission denied (publickey)"
+  -> đúng người dùng ubuntu@ và đúng file -i D:\sambo-oracle ?
+  -> báo "UNPROTECTED PRIVATE KEY FILE": chạy lại lệnh 2.2.
+  -> vẫn không vào được: Oracle -> Instance -> Console connection
+     (Launch Cloud Shell connection).
+* SSH báo "Connection timed out"
+  -> máy chủ đang Stopped? Oracle -> Instance -> Start.
+* Cloudflare báo lỗi 502 / 1033
+  -> sudo systemctl status sambo-wms cloudflared ; khởi động lại cái
+     không "active (running)".
+  -> cloudflared không chạy được: có thể đã cài nhầm bản amd64 - làm
+     lại 6.3 chọn arm64.
+* Đăng nhập xong bị đẩy ra -> phải vào bằng https://wms.<ten-mien>.
+* Máy chủ bị Oracle dừng/thu hồi do "idle" -> Start lại; làm bước 1.5
+  (Pay As You Go) để tránh lặp lại.
+* Ổ đĩa đầy -> xóa bản sao lưu cũ trong /var/lib/sambo-wms/backups (đã
+  có trên R2) hoặc tăng boot volume (tổng miễn phí 200 GB).
+* Mất máy chủ hoàn toàn -> tạo máy chủ mới (Phần 3-6), tải bản .dump và
+  .uploads.tar.gz mới nhất từ R2 về /var/lib/sambo-wms/backups, chạy
+  restore.sh với file .dump, giải nén .uploads.tar.gz vào
+  /var/lib/sambo-wms/uploads (hoặc tạo lại máy từ boot volume backup).
+
+Tài liệu chi tiết: https://github.com/Xichlo1234/sambo-wms (thư mục docs)
+=====================================================================
