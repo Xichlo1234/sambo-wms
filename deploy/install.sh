@@ -34,7 +34,7 @@ fi
 echo "== 4. Cấu hình .env (chỉ tạo nếu chưa có) =="
 if [ ! -f "$APP/shared/.env" ]; then
   [ "${NEW_DB:-0}" = 1 ] || { echo "DB đã tồn tại nhưng chưa có $APP/shared/.env – hãy tạo thủ công."; exit 1; }
-  ADMIN_PASS=$(openssl rand -base64 12 | tr -d '/+=')
+  ADMIN_PASS=${ADMIN_PASS:-$(openssl rand -base64 12 | tr -d '/+=')}
   cat > "$APP/shared/.env" <<ENV
 NODE_ENV=production
 PORT=4000

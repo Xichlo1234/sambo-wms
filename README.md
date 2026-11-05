@@ -46,7 +46,7 @@ cd server && npm test     # tạo DB kiểm thử tạm riêng, chạy 38 kịch
 
 ## Triển khai & cập nhật
 
-Hướng dẫn từng bước (máy chủ + Supabase + Cloudflare, 0 đồng): `docs/07-trien-khai-supabase-cloudflare.md` (bản Notepad: `docs/HUONG-DAN-CAI-DAT-ORACLE.txt` – Oracle Cloud miễn phí; `docs/HUONG-DAN-CAI-DAT-VPS.txt` – VPS trả phí, khuyến nghị; `docs/HUONG-DAN-CAI-DAT.txt` – máy Windows/WSL2). Chi tiết kỹ thuật: `docs/04-cai-dat-trien-khai.md`. Tóm tắt:
+Hướng dẫn từng bước (máy chủ + Supabase + Cloudflare, 0 đồng): `docs/07-trien-khai-supabase-cloudflare.md` (bản Notepad: `docs/HUONG-DAN-NHANH-ORACLE.txt` + `deploy/oracle-cloud-init.sh` – cài tự động chỉ bằng trình duyệt; `docs/HUONG-DAN-CAI-DAT-ORACLE.txt` – Oracle Cloud miễn phí; `docs/HUONG-DAN-CAI-DAT-VPS.txt` – VPS trả phí, khuyến nghị; `docs/HUONG-DAN-CAI-DAT.txt` – máy Windows/WSL2). Chi tiết kỹ thuật: `docs/04-cai-dat-trien-khai.md`. Tóm tắt:
 - Đóng gói: `bash deploy/package.sh 1.1.0`
 - Cài lần đầu: `sudo bash deploy/install.sh sambo-wms-1.1.0.tar.gz`
 - Cập nhật (không ghi đè dữ liệu, tự sao lưu, tự quay lui nếu lỗi): `sudo bash deploy/update.sh sambo-wms-1.1.0.tar.gz` – từ 1.0 lên 1.1: tự áp migration thêm bảng hóa chất & mua hàng, tự cấp quyền module mới cho vai trò mặc định, giữ nguyên quyền đã tùy chỉnh

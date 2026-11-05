@@ -1,0 +1,115 @@
+﻿=====================================================================
+   SAMBO WMS - CÀI ĐẶT NHANH CHỈ BẰNG TRÌNH DUYỆT (KHÔNG DÙNG Ổ C)
+   Oracle Cloud miễn phí + Cloudflare - máy chủ TỰ CÀI, không gõ lệnh
+=====================================================================
+Bạn KHÔNG cài gì lên máy Windows. Chỉ dùng trình duyệt Chrome/Edge và
+Notepad. Toàn bộ cài đặt chạy tự động trên máy chủ Oracle.
+
+Cần có trước:
+ - Tài khoản Oracle Cloud (Home Region Singapore), đã đăng nhập được
+   https://cloud.oracle.com  (đăng ký: xem file HUONG-DAN-CAI-DAT-ORACLE
+   Phần 1).
+ - Tên miền đã ở trạng thái Active trên Cloudflare (dash.cloudflare.com).
+ - File oracle-cloud-init.sh (gửi kèm).
+
+Chỉ có 5 bước:
+
+---------------------------------------------------------------------
+BƯỚC 1 - CLOUDFLARE: tạo đường hầm (Tunnel), lấy mã
+---------------------------------------------------------------------
+1. dash.cloudflare.com -> Zero Trust -> Networks -> Tunnels
+   -> Create a tunnel -> Cloudflared -> tên: sambo-wms -> Save tunnel.
+2. Màn hình hiện các lệnh cài. Tìm dòng có dạng:
+      sudo cloudflared service install eyJhIjoi............
+   Sao chép PHẦN SAU chữ "install " (chuỗi dài bắt đầu bằng eyJ...).
+   Đây là CF_TUNNEL_TOKEN. Dán tạm vào Notepad.
+   (KHÔNG cần chạy lệnh nào, KHÔNG chọn hệ điều hành gì cũng được.)
+3. Bấm Next -> Public Hostname:
+      Subdomain: wms
+      Domain: <ten-mien-cua-ban>
+      Service Type: HTTP      URL: localhost:4000
+   -> Save tunnel. (Connector chưa "Connected" lúc này là bình thường.)
+
+---------------------------------------------------------------------
+BƯỚC 2 - GITHUB: tạo mã đọc mã nguồn
+---------------------------------------------------------------------
+1. github.com -> ảnh đại diện -> Settings -> Developer settings
+   -> Personal access tokens -> Fine-grained tokens -> Generate new token
+2. Token name: sambo-oracle ; Expiration: 90 days
+   Repository access: Only select repositories -> sambo-wms
+   Repository permissions -> Contents: Read-only
+3. Generate token -> sao chép (github_pat_...). Đây là GITHUB_TOKEN.
+   Dán tạm vào Notepad.
+
+---------------------------------------------------------------------
+BƯỚC 3 - ĐIỀN 3 THÔNG TIN VÀO FILE oracle-cloud-init.sh
+---------------------------------------------------------------------
+1. Chuột phải file oracle-cloud-init.sh -> Open with -> Notepad.
+2. Sửa 3 dòng đầu, GIỮ NGUYÊN dấu ngoặc kép:
+      GITHUB_TOKEN="github_pat_....."
+      CF_TUNNEL_TOKEN="eyJhIjoi....."
+      ADMIN_PASSWORD="<mat-khau-admin-ban-dau>"
+   Mật khẩu admin: CHỈ chữ và số, >= 10 ký tự (vd SamboKho2026Ab).
+   Ghi lại mật khẩu này.
+3. Nhấn Ctrl+A rồi Ctrl+C (sao chép toàn bộ nội dung).
+   KHÔNG lưu file này ở nơi người khác đọc được; xóa sau khi cài xong.
+
+---------------------------------------------------------------------
+BƯỚC 4 - ORACLE: tạo máy chủ (máy chủ tự cài mọi thứ)
+---------------------------------------------------------------------
+1. cloud.oracle.com -> Menu (3 gạch) -> Compute -> Instances
+   -> Create instance.
+2. Name: sambo-wms
+3. Image and shape -> Edit:
+   - Change image -> Ubuntu -> Canonical Ubuntu 24.04 (không chọn
+     "Minimal") -> Select image.
+   - Change shape -> Ampere -> VM.Standard.A1.Flex -> OCPU: 2,
+     Memory: 12 GB -> Select shape. (Phải có nhãn "Always Free".)
+4. Add SSH keys -> "Generate a key pair for me" -> Save private key
+   (lưu sang ổ D, vd D:\sambo-oracle.key - file rất nhỏ; dùng khi
+   cần sửa lỗi).
+5. Boot volume: tích "Specify a custom boot volume size" -> 100 GB.
+6. Kéo xuống cuối -> "Show advanced options" -> tab Management
+   -> Initialization script: chọn "Paste cloud-init script"
+   -> dán (Ctrl+V) nội dung đã sao chép ở Bước 3.
+7. Bấm Create.
+   - Báo "Out of capacity": đổi Availability domain (AD-1/2/3) ở mục
+     Placement rồi Create lại; hoặc thử lại sau vài giờ.
+
+---------------------------------------------------------------------
+BƯỚC 5 - CHỜ 20-30 PHÚT RỒI ĐĂNG NHẬP
+---------------------------------------------------------------------
+1. Máy chủ RUNNING là bắt đầu tự cài (khoảng 20-30 phút).
+2. Theo dõi: Cloudflare -> Tunnels -> sambo-wms chuyển "HEALTHY"
+   (Connected) là gần xong.
+3. Mở https://wms.<ten-mien-cua-ban> -> đăng nhập:
+      admin / mật khẩu ADMIN_PASSWORD ở Bước 3
+   -> hệ thống bắt đổi mật khẩu mới -> XONG.
+4. Xóa file oracle-cloud-init.sh đã điền và đoạn Notepad tạm.
+
+=====================================================================
+SAU KHI VÀO ĐƯỢC (đều làm trên trình duyệt)
+=====================================================================
+A. Chỉ cho nhân viên công ty vào:
+   Cloudflare Zero Trust -> Access -> Applications -> Add an
+   application -> Self-hosted -> Application domain: wms.<ten-mien>
+   -> Policy: Allow ; Include: Emails ending in @<email-cong-ty>
+   (hoặc "Emails" và nhập từng email) -> Save.
+B. Oracle (khuyến nghị): Billing & Cost Management -> Upgrade to Pay
+   As You Go (tránh bị thu hồi máy chủ khi chạy nhẹ; vẫn 0 đồng với
+   tài nguyên Always Free) + Budgets: cảnh báo 1 USD.
+C. Trong ứng dụng: Cấu hình hệ thống (tên công ty, kho, vị trí...),
+   Sao lưu & khôi phục -> Sao lưu ngay -> Kiểm tra toàn vẹn.
+   (Hệ thống đã tự sao lưu lúc 01:30 hằng đêm.)
+D. Nhập dữ liệu Excel, tạo người dùng: xem file HUONG-DAN-CAI-DAT-ORACLE
+   Phần 9.
+E. Sao lưu ra ngoài lên Cloudflare R2: làm sau, có hỗ trợ.
+
+NẾU SAU 40 PHÚT VẪN KHÔNG VÀO ĐƯỢC
+ - Chụp màn hình: trang https://wms.<ten-mien>, trang Tunnels của
+   Cloudflare, trang Instance của Oracle -> gửi kỹ thuật.
+ - Nguyên nhân hay gặp: dán sai/thiếu token ở Bước 3 (thừa dấu cách,
+   mất dấu ngoặc kép), Public Hostname sai (phải HTTP + localhost:4000).
+ - Sửa xong: Oracle -> Instance -> More actions -> Terminate (tích xóa
+   boot volume) rồi làm lại Bước 4 với nội dung đúng.
+=====================================================================
