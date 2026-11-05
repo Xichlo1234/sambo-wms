@@ -117,11 +117,81 @@ async function build(type: string, id: number, req: Request): Promise<ReportResu
         signatures: ['Người lập', 'Kế toán', 'Người phê duyệt'],
       };
     }
+    case 'chem-receipt': {
+      if (!can(req, 'chemicals.view')) throw forbidden();
+      const d = await prisma.chemicalReceipt.findUnique({ where: { id }, include: { warehouse: true, supplier: true, creator: true, purchase_order: true, batches: true, lines: { orderBy: { line_no: 'asc' }, include: { chemical: { include: { unit: true } }, location: true } } } });
+      if (!d) throw notFound();
+      const RES: Record<string, string> = { PASSED: 'Đạt', QUARANTINE: 'Cách ly', FAILED: 'Không đạt' };
+      return {
+        title: 'PHIẾU NHẬP KHO HÓA CHẤT', subtitle: `Số: ${d.code} – Ngày CT: ${vn(d.doc_date)} – Ngày nhận: ${vn(d.received_date)} – ${STATUS_LABEL[d.status]}`,
+        summary: [{ label: 'Kho', value: d.warehouse.name }, { label: 'Nhà cung cấp', value: d.supplier?.name ?? '' }, { label: 'Đơn đặt hàng', value: d.purchase_order?.code ?? '' }, { label: 'Số HĐ/phiếu giao', value: d.supplier_doc_no ?? '' },
+          { label: 'Kiểm tra tiếp nhận', value: `Bao bì ${d.chk_packaging ? '✔' : '✘'} · Nhãn ${d.chk_label ? '✔' : '✘'} · Chứng từ ${d.chk_documents ? '✔' : '✘'} · SDS ${d.chk_sds ? '✔' : '✘'} · Vận chuyển ${d.chk_transport ? '✔' : '✘'}` }, { label: 'Điều kiện vận chuyển', value: d.transport_note ?? '' }],
+        columns: [{ key: 'stt', header: 'STT', type: 'number' }, { key: 'code', header: 'Mã HC' }, { key: 'name', header: 'Tên hóa chất' }, { key: 'batch', header: 'Mã lô NSX' }, { key: 'internal', header: 'Lô nội bộ' }, { key: 'mfg', header: 'NSX', type: 'date' }, { key: 'exp', header: 'HSD', type: 'date' }, { key: 'unit', header: 'ĐVT' }, { key: 'doc', header: 'SL CT', type: 'number', total: true }, { key: 'rec', header: 'SL nhận', type: 'number', total: true }, { key: 'loc', header: 'Vị trí' }, { key: 'res', header: 'Kết quả' }, { key: 'note', header: 'Tình trạng' }],
+        rows: d.lines.map((l) => ({ stt: l.line_no, code: l.chemical.code, name: l.chemical.name, batch: l.batch_no, internal: d.batches.find((b) => b.receipt_line_id === l.id)?.internal_code ?? '', mfg: l.mfg_date, exp: l.expiry_date, unit: l.chemical.unit.code, doc: n(l.qty_doc), rec: n(l.qty_received), loc: l.location.code, res: RES[l.result], note: l.condition_note ?? '' })),
+        signatures: ['Người giao hàng', 'Thủ kho hóa chất', 'HSE', 'Người phê duyệt'], landscape: true,
+      };
+    }
+    case 'chem-issue': {
+      if (!can(req, 'chemicals.view') && !can(req, 'chemicals.request')) throw forbidden();
+      const d = await prisma.chemicalIssue.findUnique({ where: { id }, include: { department: true, requester: true, warehouse: true, lines: { orderBy: { line_no: 'asc' }, include: { chemical: { include: { unit: true } } } } } });
+      if (!d) throw notFound();
+      const rows: Record<string, unknown>[] = [];
+      for (const l of d.lines) {
+        const det = (l.batch_detail as { internal_code: string; batch_no: string; expiry_date: string; qty: number }[] | null) ?? [];
+        if (!det.length) rows.push({ code: l.chemical.code, name: l.chemical.name, unit: l.chemical.unit.code, req: n(l.qty_requested), appr: n(l.qty_approved), qty: n(l.qty_issued), batch: '', exp: null, ppe: l.chemical.ppe_req ?? '' });
+        det.forEach((b, i) => rows.push({ code: i ? '' : l.chemical.code, name: i ? '' : l.chemical.name, unit: l.chemical.unit.code, req: i ? null : n(l.qty_requested), appr: i ? null : n(l.qty_approved), qty: b.qty, batch: `${b.internal_code} / ${b.batch_no}`, exp: b.expiry_date, ppe: i ? '' : l.chemical.ppe_req ?? '' }));
+      }
+      return {
+        title: 'PHIẾU XUẤT KHO HÓA CHẤT', subtitle: `Số: ${d.code} – Ngày: ${vn(d.doc_date)} – ${STATUS_LABEL[d.status]}`,
+        summary: [{ label: 'Bộ phận sử dụng', value: d.department.name }, { label: 'Mục đích', value: d.purpose }, { label: 'Khu vực sử dụng', value: d.work_area }, { label: 'Người chịu trách nhiệm', value: d.responsible_person }, { label: 'Người yêu cầu', value: d.requester.full_name },
+          { label: 'HSE xác nhận', value: d.requires_hse ? (d.hse_confirmed_at ? `Đã xác nhận ${vnt(d.hse_confirmed_at)} – ${d.hse_note ?? ''}` : 'CHƯA XÁC NHẬN') : 'Không yêu cầu' }, { label: 'Thời gian xuất', value: vnt(d.issued_at) }, { label: 'Người nhận', value: `${d.receiver_name ?? ''}${d.receive_signature ? ` (xác nhận điện tử “${d.receive_signature}” ${vnt(d.receive_confirmed_at)})` : ''}` }],
+        columns: [{ key: 'code', header: 'Mã HC' }, { key: 'name', header: 'Tên hóa chất' }, { key: 'unit', header: 'ĐVT' }, { key: 'req', header: 'SL yêu cầu', type: 'number' }, { key: 'appr', header: 'SL duyệt', type: 'number' }, { key: 'batch', header: 'Lô (nội bộ / NSX)' }, { key: 'exp', header: 'HSD', type: 'date' }, { key: 'qty', header: 'SL xuất', type: 'number', total: true }, { key: 'ppe', header: 'Bảo hộ yêu cầu (theo SDS)' }],
+        rows, signatures: ['Người yêu cầu', 'Người phê duyệt', 'Thủ kho xuất', 'Người nhận'], landscape: true,
+      };
+    }
+    case 'chem-stocktake': {
+      if (!can(req, 'chemicals.view')) throw forbidden();
+      const st = await prisma.chemicalStocktake.findUnique({ where: { id }, include: { lines: true } });
+      if (!st) throw notFound();
+      const bs = await prisma.chemicalBatch.findMany({ where: { id: { in: st.lines.map((l) => l.batch_id) } }, include: { chemical: { include: { unit: true } }, location: true } });
+      return {
+        title: 'BIÊN BẢN KIỂM KÊ KHO HÓA CHẤT', subtitle: `Số: ${st.code} – ${st.name} – Chốt sổ: ${vnt(st.snapshot_at)} – ${STATUS_LABEL[st.status]}`,
+        columns: [{ key: 'loc', header: 'Vị trí' }, { key: 'code', header: 'Mã HC' }, { key: 'name', header: 'Tên hóa chất' }, { key: 'lot', header: 'Lô' }, { key: 'exp', header: 'HSD', type: 'date' }, { key: 'unit', header: 'ĐVT' }, { key: 'book', header: 'Tồn sổ', type: 'number', total: true }, { key: 'counted', header: 'Thực tế', type: 'number', total: true }, { key: 'var', header: 'Chênh lệch', type: 'number', total: true }, { key: 'pack', header: 'Bao bì' }, { key: 'reason', header: 'Giải trình' }],
+        rows: st.lines.map((l) => { const b = bs.find((x) => x.id === l.batch_id)!; return { loc: b.location.code, code: b.chemical.code, name: b.chemical.name, lot: `${b.internal_code} / ${b.batch_no}`, exp: b.expiry_date, unit: b.chemical.unit.code, book: n(l.book_qty), counted: n(l.counted_qty), var: l.counted_qty != null ? Number(l.counted_qty.minus(l.book_qty)) : null, pack: l.packaging_ok == null ? '' : l.packaging_ok ? 'Tốt' : `Bất thường: ${l.packaging_note ?? ''}`, reason: l.reason ?? '' }; }),
+        signatures: ['Người kiểm đếm', 'Thủ kho hóa chất', 'HSE', 'Quản lý kho'], landscape: true,
+      };
+    }
+    case 'chem-adjustment': {
+      if (!can(req, 'chemicals.view')) throw forbidden();
+      const a = await prisma.chemicalAdjustment.findUnique({ where: { id }, include: { lines: true } });
+      if (!a) throw notFound();
+      const bs = await prisma.chemicalBatch.findMany({ where: { id: { in: a.lines.map((l) => l.batch_id) } }, include: { chemical: { include: { unit: true } } } });
+      return {
+        title: a.adj_type === 'DISPOSAL' ? 'BIÊN BẢN TIÊU HỦY HÓA CHẤT' : 'PHIẾU ĐIỀU CHỈNH TỒN KHO HÓA CHẤT', subtitle: `Số: ${a.code} – Ngày: ${vn(a.doc_date)} – ${STATUS_LABEL[a.status]}`,
+        summary: [{ label: 'Lý do', value: a.reason }, ...(a.disposal_method ? [{ label: 'Phương thức / đơn vị xử lý', value: a.disposal_method }] : [])],
+        columns: [{ key: 'code', header: 'Mã HC' }, { key: 'name', header: 'Tên hóa chất' }, { key: 'lot', header: 'Lô' }, { key: 'exp', header: 'HSD', type: 'date' }, { key: 'unit', header: 'ĐVT' }, { key: 'qty', header: 'SL (+/-)', type: 'number', total: true }, { key: 'reason', header: 'Lý do dòng' }],
+        rows: a.lines.map((l) => { const b = bs.find((x) => x.id === l.batch_id)!; return { code: b.chemical.code, name: b.chemical.name, lot: `${b.internal_code} / ${b.batch_no}`, exp: b.expiry_date, unit: b.chemical.unit.code, qty: n(l.qty_delta), reason: l.reason ?? '' }; }),
+        signatures: ['Người lập', 'HSE', 'Người phê duyệt', 'Đơn vị xử lý'],
+      };
+    }
+    case 'po': {
+      if (!can(req, 'purchase.view')) throw forbidden();
+      const po = await prisma.purchaseOrder.findUnique({ where: { id }, include: { supplier: true, lines: { orderBy: { line_no: 'asc' }, include: { item: { include: { unit: true } }, chemical: { include: { unit: true } } } } } });
+      if (!po) throw notFound();
+      const val = can(req, 'purchase.view_value');
+      return {
+        title: 'ĐƠN ĐẶT HÀNG (PURCHASE ORDER)', subtitle: `Số: ${po.code} – Ngày đặt: ${vn(po.order_date)} – Giao dự kiến: ${vn(po.expected_date)}`,
+        summary: [{ label: 'Nhà cung cấp', value: `${po.supplier.code} – ${po.supplier.name}` }, { label: 'Địa chỉ', value: po.supplier.address ?? '' }, { label: 'Liên hệ', value: [po.supplier.contact_person, po.supplier.phone, po.supplier.email].filter(Boolean).join(' – ') }, { label: 'Tiền tệ', value: po.currency ?? '' }, { label: 'Điều khoản thanh toán', value: po.payment_terms ?? '' }, { label: 'Điều kiện giao hàng', value: po.delivery_terms ?? '' }],
+        columns: [{ key: 'stt', header: 'STT', type: 'number' }, { key: 'code', header: 'Mã hàng' }, { key: 'name', header: 'Tên hàng hóa' }, { key: 'unit', header: 'ĐVT' }, { key: 'qty', header: 'Số lượng', type: 'number', total: true }, ...(val ? [{ key: 'price', header: 'Đơn giá', type: 'money' as const }, { key: 'amount', header: 'Thành tiền', type: 'money' as const, total: true }] : []), { key: 'note', header: 'Ghi chú' }],
+        rows: po.lines.map((l) => ({ stt: l.line_no, code: l.item?.code ?? l.chemical?.code, name: l.item?.name ?? l.chemical?.name, unit: l.item?.unit.code ?? l.chemical?.unit.code, qty: n(l.qty_ordered), price: n(l.unit_price), amount: n(l.amount), note: l.note ?? '' })),
+        signatures: ['Người lập', 'Người phê duyệt', 'Xác nhận của nhà cung cấp'],
+      };
+    }
   }
   throw notFound('Loại biểu mẫu không hợp lệ');
 }
 
-r.get('/:type/:id', requirePerm('receipts.view', 'issues.view', 'issues.view_all', 'stocktakes.view', 'transfers.view', 'returns.view', 'adjustments.view'), async (req, res) => {
+r.get('/:type/:id', requirePerm('receipts.view', 'issues.view', 'issues.view_all', 'stocktakes.view', 'transfers.view', 'returns.view', 'adjustments.view', 'chemicals.view', 'chemicals.request', 'purchase.view'), async (req, res) => {
   const result = await build(String(req.params.type), Number(req.params.id), req);
   const company = String((await getSettings())['company.name'] || 'SAMBO GOLD');
   await audit(req, 'PRINT', String(req.params.type), { id: Number(req.params.id) });

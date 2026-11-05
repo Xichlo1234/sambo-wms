@@ -12,6 +12,16 @@ export const DEFAULT_SETTINGS: Record<string, unknown> = {
   'currency.allowed': ['VND', 'USD', 'LAK', 'THB', 'CNY', 'EUR'],
   'upload.max_mb': 20,
   'issue.require_quota_note': true, // Bắt buộc ghi lý do khi vượt định mức
+  // Chính sách kho hóa chất (công ty xác nhận / điều chỉnh)
+  'chemical.require_batch': true, // Bắt buộc mã lô khi nhập
+  'chemical.require_expiry': true, // Bắt buộc hạn sử dụng khi nhập
+  'chemical.require_mfg_date': false, // Bắt buộc ngày sản xuất
+  'chemical.require_sds': true, // Bắt buộc có SDS/MSDS còn hiệu lực trước khi nhập kho / xuất
+  'chemical.require_safety_verified': false, // Bắt buộc thông tin an toàn đã được chuyên gia xác nhận trước khi nhập/xuất
+  'chemical.fefo': true, // Xuất theo hạn sử dụng gần nhất trước
+  'chemical.expiry_alert_days': [30, 60, 90],
+  'chemical.long_storage_days': 365,
+  'purchase.require_quote_count': 0, // Số báo giá tối thiểu trước khi lập PO (0 = không bắt buộc – chờ công ty xác nhận)
 };
 
 let cache: { at: number; data: Record<string, unknown> } | null = null;

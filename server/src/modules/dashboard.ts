@@ -3,6 +3,7 @@ import { prisma } from '../db';
 import { requirePerm, can } from '../lib/auth';
 import { ok } from '../lib/http';
 import { queryNxt, endOfDay } from '../services/stockQueries';
+import { chemicalAlerts } from './chemicals';
 
 const r = Router();
 
@@ -47,6 +48,35 @@ r.get('/', requirePerm('dashboard.view'), async (req, res) => {
   const lowList = rows.filter((x) => ['OUT', 'BELOW_MIN'].includes(x.stock_status) && x.min_stock > 0).slice(0, 10)
     .map((x) => ({ item_id: x.item_id, code: x.code, name: x.name, unit: x.unit, closing: x.closing, min_stock: x.min_stock, status: x.stock_status }));
   const costing = await prisma.systemSetting.findUnique({ where: { key: 'inventory.costing_method' } });
+  let chemical = null;
+  if (can(req, 'chemicals.view')) {
+    const [alerts, chemReceiptsPending, chemIssuesPending, chemToIssue, chemHse, chemAdjPending, chemStocktakeOpen, incidentsOpen] = await Promise.all([
+      chemicalAlerts(),
+      prisma.chemicalReceipt.count({ where: { status: 'SUBMITTED' } }),
+      prisma.chemicalIssue.count({ where: { status: 'SUBMITTED' } }),
+      prisma.chemicalIssue.count({ where: { status: 'APPROVED' } }),
+      prisma.chemicalIssue.count({ where: { requires_hse: true, hse_confirmed_at: null, status: { in: ['SUBMITTED', 'APPROVED'] } } }),
+      prisma.chemicalAdjustment.count({ where: { status: 'SUBMITTED' } }),
+      prisma.chemicalStocktake.count({ where: { status: { in: ['COUNTING', 'SUBMITTED'] } } }),
+      prisma.chemicalIncident.count({ where: { status: 'OPEN' } }),
+    ]);
+    chemical = { ...alerts, tasks: { receipts_pending: chemReceiptsPending, issues_pending: chemIssuesPending, to_issue: chemToIssue, hse_pending: chemHse, adjust_pending: chemAdjPending, stocktakes_open: chemStocktakeOpen, incidents_open: incidentsOpen } };
+  }
+  let purchase = null;
+  if (can(req, 'purchase.view')) {
+    const t0 = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
+    const since = new Date(Date.now() - 180 * 86400_000);
+    const [prPending, poPending, poActive, poLate, activeSup, evaluated] = await Promise.all([
+      prisma.purchaseRequest.count({ where: { status: 'SUBMITTED' } }),
+      prisma.purchaseOrder.count({ where: { status: 'SUBMITTED' } }),
+      prisma.purchaseOrder.count({ where: { status: { in: ['APPROVED', 'SENT', 'PARTIAL'] } } }),
+      prisma.purchaseOrder.count({ where: { status: { in: ['APPROVED', 'SENT', 'PARTIAL'] }, expected_date: { lt: t0 } } }),
+      prisma.purchaseOrder.findMany({ where: { order_date: { gte: since }, status: { notIn: ['DRAFT', 'CANCELLED', 'REJECTED'] } }, select: { supplier_id: true }, distinct: ['supplier_id'] }),
+      prisma.supplierEvaluation.findMany({ where: { created_at: { gte: since } }, select: { supplier_id: true }, distinct: ['supplier_id'] }),
+    ]);
+    purchase = { pr_pending: prPending, po_pending: poPending, po_active: poActive, po_late: poLate, suppliers_need_eval: activeSup.filter((a) => !evaluated.some((e) => e.supplier_id === a.supplier_id)).length,
+      pr_approved_waiting: await prisma.purchaseRequest.count({ where: { status: 'APPROVED' } }) };
+  }
   ok(res, {
     period: { from, to },
     mining: {
@@ -63,6 +93,8 @@ r.get('/', requirePerm('dashboard.view'), async (req, res) => {
       stocktakes_open: openStocktakes, adjustments_pending: pendingAdjust, transfers_pending: pendingTransfers, returns_pending: pendingReturns,
       qc_pending_lines: pendingQc, stock_alerts: statusCount('BELOW_MIN') + rows.filter((x) => x.stock_status === 'OUT' && x.min_stock > 0).length,
     },
+    chemical,
+    purchase,
     low_stock: lowList,
     trend,
     top_departments: topConsumption,

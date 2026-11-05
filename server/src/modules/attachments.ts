@@ -37,7 +37,39 @@ const ENTITY_VIEW: Record<string, { perms: string[]; model: string; postedStatus
   stock_return: { perms: ['returns.view'], model: 'stockReturn', postedStatuses: ['POSTED'] },
   stock_adjustment: { perms: ['adjustments.view'], model: 'stockAdjustment', postedStatuses: ['POSTED'] },
   stocktake: { perms: ['stocktakes.view'], model: 'stocktake', postedStatuses: ['POSTED'] },
+  chemical: { perms: ['chemicals.view'], model: 'chemical' },
+  chemical_batch: { perms: ['chemicals.view'], model: 'chemicalBatch' },
+  chemical_receipt: { perms: ['chemicals.view'], model: 'chemicalReceipt', postedStatuses: ['POSTED'] },
+  chemical_issue: { perms: ['chemicals.view', 'chemicals.request'], model: 'chemicalIssue', postedStatuses: ['ISSUED', 'RECEIVED'] },
+  chemical_stocktake: { perms: ['chemicals.view'], model: 'chemicalStocktake', postedStatuses: ['POSTED'] },
+  chemical_adjustment: { perms: ['chemicals.view'], model: 'chemicalAdjustment', postedStatuses: ['POSTED'] },
+  chemical_incident: { perms: ['chemicals.view'], model: 'chemicalIncident' },
+  chemical_inspection: { perms: ['chemicals.view'], model: 'chemicalInspection' },
+  purchase_request: { perms: ['purchase.view'], model: 'purchaseRequest' },
+  supplier_quote: { perms: ['purchase.view'], model: 'supplierQuote' },
+  purchase_order: { perms: ['purchase.view'], model: 'purchaseOrder' },
+  supplier_complaint: { perms: ['suppliers.view'], model: 'supplierComplaint' },
 };
+
+/** Kiểm tra & lưu 1 file tải lên – dùng chung (đính kèm, hồ sơ SDS) */
+export async function storeUpload(f: Express.Multer.File, meta: { entity_type: string; entity_id: number; category: string; note?: string }, userId: number) {
+  const ext = path.extname(f.originalname).toLowerCase();
+  const rule = ALLOWED[ext];
+  if (!rule) throw badRequest(`File "${f.originalname}": chỉ chấp nhận PDF, XLSX, DOCX, JPG, PNG`);
+  if (!rule.mimes.includes(f.mimetype) || !rule.magic(f.buffer)) throw badRequest(`File "${f.originalname}" không đúng định dạng thực tế (${ext}). Có thể file bị đổi đuôi.`);
+  const now = new Date();
+  const sub = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const stored = `${sub}/${crypto.randomUUID()}${ext}`;
+  fs.mkdirSync(path.join(UPLOAD_DIR, sub), { recursive: true });
+  fs.writeFileSync(path.join(UPLOAD_DIR, stored), f.buffer, { flag: 'wx' });
+  return prisma.attachment.create({
+    data: {
+      ...meta, file_name: Buffer.from(f.originalname, 'latin1').toString('utf8').slice(0, 255), stored_name: stored, mime_type: f.mimetype,
+      size_bytes: f.size, sha256: crypto.createHash('sha256').update(f.buffer).digest('hex'), created_by: userId,
+    },
+  });
+}
+export { upload as attachmentUpload };
 
 function assertView(req: Request, entityType: string) {
   const e = ENTITY_VIEW[entityType];
@@ -75,22 +107,7 @@ r.post('/', requirePerm('attachments.upload'), upload.array('files', 10), async 
   if (!files.length) throw badRequest('Chưa chọn file');
   const saved = [];
   for (const f of files) {
-    const ext = path.extname(f.originalname).toLowerCase();
-    const rule = ALLOWED[ext];
-    if (!rule) throw badRequest(`File "${f.originalname}": chỉ chấp nhận PDF, XLSX, DOCX, JPG, PNG`);
-    if (!rule.mimes.includes(f.mimetype) || !rule.magic(f.buffer)) throw badRequest(`File "${f.originalname}" không đúng định dạng thực tế (${ext}). Có thể file bị đổi đuôi.`);
-    const now = new Date();
-    const sub = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}`;
-    const stored = `${sub}/${crypto.randomUUID()}${ext}`;
-    fs.mkdirSync(path.join(UPLOAD_DIR, sub), { recursive: true });
-    fs.writeFileSync(path.join(UPLOAD_DIR, stored), f.buffer, { flag: 'wx' });
-    const a = await prisma.attachment.create({
-      data: {
-        entity_type: d.entity_type, entity_id: d.entity_id, category: d.category, note: d.note,
-        file_name: Buffer.from(f.originalname, 'latin1').toString('utf8').slice(0, 255), stored_name: stored, mime_type: f.mimetype,
-        size_bytes: f.size, sha256: crypto.createHash('sha256').update(f.buffer).digest('hex'), created_by: req.user!.id,
-      },
-    });
+    const a = await storeUpload(f, { entity_type: d.entity_type, entity_id: d.entity_id, category: d.category, note: d.note }, req.user!.id);
     saved.push({ ...a, stored_name: undefined });
     await audit(req, 'UPLOAD', 'attachment', { id: a.id, code: a.file_name.slice(0, 60) }, undefined, { entity_type: d.entity_type, entity_id: d.entity_id, size: f.size });
   }

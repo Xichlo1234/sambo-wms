@@ -16,6 +16,12 @@ import { nextDocNo, DOC_PREFIX } from '../lib/docno';
 import { transition } from '../lib/doc';
 import { notifyPermission, notifyUsers } from '../lib/notify';
 import { postMovements, toDateOnly, assertPeriodOpen, type MoveInput } from '../services/inventory';
+import { validatePoLink, applyPoReceipt } from '../services/purchasing';
+
+async function checkPo(d: { purchase_order_id?: number | null; supplier_id?: number | null; lines: { po_item_id?: number | null; item_id: number; qty_received: number; qty_rejected: number }[] }) {
+  const po = await validatePoLink(prisma, d.purchase_order_id, d.supplier_id, 'item', d.lines.map((l, i) => ({ po_item_id: l.po_item_id, item_id: l.item_id, qty: l.qty_received - l.qty_rejected, line_no: i + 1 })));
+  return po;
+}
 
 const r = Router();
 const ENTITY = 'stock_receipt';
@@ -24,6 +30,7 @@ const lineSchema = z
   .object({
     item_id: z.coerce.number().int().positive('Chọn vật tư'),
     location_id: z.coerce.number().int().positive('Chọn vị trí lưu kho'),
+    po_item_id: z.union([z.coerce.number().int().positive(), z.null()]).optional(),
     qty_doc: z.coerce.number().min(0, 'SL chứng từ không âm'),
     qty_received: z.coerce.number().min(0, 'SL thực nhận không âm'),
     qty_pending: z.coerce.number().min(0).default(0),
@@ -43,6 +50,7 @@ const receiptSchema = z.object({
   received_date: z.union([z.coerce.date(), z.literal('').transform(() => null), z.null()]).optional(),
   supplier_id: z.union([z.coerce.number().int().positive(), z.literal('').transform(() => null), z.null()]).optional(),
   po_number: zOptStr,
+  purchase_order_id: z.union([z.coerce.number().int().positive(), z.literal('').transform(() => null), z.null()]).optional(),
   supplier_doc_no: zOptStr,
   deliverer_name: zOptStr,
   receiver_name: zOptStr,
@@ -60,6 +68,7 @@ const detailInclude = {
   warehouse: { select: { id: true, code: true, name: true } },
   supplier: { select: { id: true, code: true, name: true } },
   department: { select: { id: true, code: true, name: true } },
+  purchase_order: { select: { id: true, code: true } },
   creator: { select: { id: true, full_name: true } },
   approver: { select: { id: true, full_name: true } },
   lines: {
@@ -107,6 +116,7 @@ function buildLines(lines: z.infer<typeof lineSchema>[]) {
       line_no: i + 1,
       item_id: l.item_id,
       location_id: l.location_id,
+      po_item_id: l.po_item_id ?? null,
       qty_doc: l.qty_doc,
       qty_received: l.qty_received,
       qty_accepted: accepted,
@@ -156,6 +166,8 @@ r.post('/', requirePerm('receipts.create'), async (req, res) => {
     if (exist) return ok(res, exist); // chống tạo trùng do bấm lưu nhiều lần
   }
   await validateLines(d.warehouse_id, d.lines);
+  const po = await checkPo(d);
+  if (po) { d.po_number = po.code; d.supplier_id = po.supplier_id; }
   const doc = await withTx(async (tx) => {
     const code = await nextDocNo(tx, DOC_PREFIX.RECEIPT, d.doc_date);
     const { lines, ...head } = d;
@@ -182,6 +194,8 @@ r.put('/:id', requirePerm('receipts.create'), async (req, res) => {
   if (before.created_by !== req.user!.id && !can(req, 'receipts.approve')) throw ruleViolation('Chỉ người lập phiếu được sửa phiếu nháp');
   const d = receiptSchema.parse(req.body);
   await validateLines(d.warehouse_id, d.lines);
+  const po = await checkPo(d);
+  if (po) { d.po_number = po.code; d.supplier_id = po.supplier_id; }
   const doc = await withTx(async (tx) => {
     await transition(tx, 'stockReceipt', id, ['DRAFT', 'REJECTED'], { updated_by: req.user!.id });
     await tx.stockReceiptItem.deleteMany({ where: { receipt_id: id } });
@@ -214,6 +228,7 @@ r.post('/:id/submit', requirePerm('receipts.create'), async (req, res) => {
     if (l.qty_rejected.gt(0) && !l.condition_note) throw ruleViolation(`Dòng ${l.line_no}: có hàng không đạt – bắt buộc ghi tình trạng hàng hóa.`);
   }
   await assertPeriodOpen(prisma, doc.doc_date);
+  await checkPo({ purchase_order_id: doc.purchase_order_id, supplier_id: doc.supplier_id, lines: doc.lines.map((l) => ({ po_item_id: l.po_item_id, item_id: l.item_id, qty_received: Number(l.qty_received), qty_rejected: Number(l.qty_rejected) })) });
   await withTx(async (tx) => {
     await transition(tx, 'stockReceipt', id, ['DRAFT', 'REJECTED'], { status: 'SUBMITTED', submitted_by: req.user!.id, submitted_at: new Date(), reject_reason: null });
     await history(tx, ENTITY, id, 'SUBMIT', req.user!.id, doc.status, 'SUBMITTED');
@@ -241,6 +256,7 @@ r.post('/:id/approve', requirePerm('receipts.approve'), async (req, res) => {
     }
     if (!moves.length) throw ruleViolation('Phiếu không có số lượng nào được nhập kho (toàn bộ không đạt). Hãy từ chối hoặc hủy phiếu.');
     await postMovements(tx, req.user!.id, moves);
+    await applyPoReceipt(tx, doc.purchase_order_id, doc.lines.map((l) => ({ po_item_id: l.po_item_id, qty: l.qty_accepted.plus(l.qty_pending) })));
     await history(tx, ENTITY, id, 'APPROVE', req.user!.id, 'SUBMITTED', 'POSTED', comment);
     await audit(req, 'APPROVE_POST', ENTITY, doc, { status: 'SUBMITTED' }, { status: 'POSTED', movements: moves.length }, tx);
     await notifyUsers(tx, [doc.created_by], { type: 'INFO', title: `Phiếu nhập ${doc.code} đã được duyệt & ghi sổ`, link: `/receipts/${id}` });

@@ -113,17 +113,21 @@ model User {
   roles      UserRole[]
   sessions   Session[]
 
-  receipts_created    StockReceipt[]    @relation("ReceiptCreator")
-  receipts_approved   StockReceipt[]    @relation("ReceiptApprover")
-  issues_requested    StockIssue[]      @relation("IssueRequester")
-  issues_approved     StockIssue[]      @relation("IssueApprover")
-  issues_issued       StockIssue[]      @relation("IssueIssuer")
-  transfers_created   StockTransfer[]   @relation("TransferCreator")
-  returns_created     StockReturn[]     @relation("ReturnCreator")
-  adjustments_created StockAdjustment[] @relation("AdjustmentCreator")
-  stocktakes_created  Stocktake[]       @relation("StocktakeCreator")
-  movements           StockMovement[]
-  approval_actions    ApprovalHistory[]
+  receipts_created      StockReceipt[]    @relation("ReceiptCreator")
+  receipts_approved     StockReceipt[]    @relation("ReceiptApprover")
+  issues_requested      StockIssue[]      @relation("IssueRequester")
+  issues_approved       StockIssue[]      @relation("IssueApprover")
+  issues_issued         StockIssue[]      @relation("IssueIssuer")
+  transfers_created     StockTransfer[]   @relation("TransferCreator")
+  returns_created       StockReturn[]     @relation("ReturnCreator")
+  adjustments_created   StockAdjustment[] @relation("AdjustmentCreator")
+  stocktakes_created    Stocktake[]       @relation("StocktakeCreator")
+  movements             StockMovement[]
+  approval_actions      ApprovalHistory[]
+  chem_receipts_created ChemicalReceipt[] @relation("ChemReceiptCreator")
+  chem_issues_requested ChemicalIssue[]   @relation("ChemIssueRequester")
+  purchase_requests     PurchaseRequest[] @relation("PrRequester")
+  purchase_orders       PurchaseOrder[]   @relation("PoCreator")
 
   @@index([department_id])
   @@map("users")
@@ -218,10 +222,12 @@ model Department {
 
   members User[] @relation("DepartmentMembers")
 
-  receipts  StockReceipt[]
-  issues    StockIssue[]
-  returns   StockReturn[]
-  movements StockMovement[]
+  receipts         StockReceipt[]
+  issues           StockIssue[]
+  returns          StockReturn[]
+  movements        StockMovement[]
+  chemicalIssues   ChemicalIssue[]
+  purchaseRequests PurchaseRequest[]
 
   @@map("departments")
 }
@@ -246,15 +252,18 @@ model Warehouse {
 
   locations WarehouseLocation[]
 
-  receipts       StockReceipt[]
-  issues         StockIssue[]
-  transfers_from StockTransfer[]    @relation("TransferFrom")
-  transfers_to   StockTransfer[]    @relation("TransferTo")
-  returns        StockReturn[]
-  adjustments    StockAdjustment[]
-  stocktakes     Stocktake[]
-  movements      StockMovement[]
-  balances       InventoryBalance[]
+  receipts         StockReceipt[]
+  issues           StockIssue[]
+  transfers_from   StockTransfer[]    @relation("TransferFrom")
+  transfers_to     StockTransfer[]    @relation("TransferTo")
+  returns          StockReturn[]
+  adjustments      StockAdjustment[]
+  stocktakes       Stocktake[]
+  movements        StockMovement[]
+  balances         InventoryBalance[]
+  chemicalBatches  ChemicalBatch[]
+  chemicalReceipts ChemicalReceipt[]
+  chemicalIssues   ChemicalIssue[]
 
   @@map("warehouses")
 }
@@ -274,16 +283,18 @@ model WarehouseLocation {
 
   warehouse Warehouse @relation(fields: [warehouse_id], references: [id])
 
-  items               Item[]
-  receipt_lines       StockReceiptItem[]
-  issue_lines         StockIssueItem[]
-  transfer_lines_from StockTransferItem[]   @relation("TransferLineFrom")
-  transfer_lines_to   StockTransferItem[]   @relation("TransferLineTo")
-  return_lines        StockReturnItem[]
-  adjustment_lines    StockAdjustmentItem[]
-  stocktake_lines     StocktakeItem[]
-  movements           StockMovement[]
-  balances            InventoryBalance[]
+  items                Item[]
+  receipt_lines        StockReceiptItem[]
+  issue_lines          StockIssueItem[]
+  transfer_lines_from  StockTransferItem[]   @relation("TransferLineFrom")
+  transfer_lines_to    StockTransferItem[]   @relation("TransferLineTo")
+  return_lines         StockReturnItem[]
+  adjustment_lines     StockAdjustmentItem[]
+  stocktake_lines      StocktakeItem[]
+  movements            StockMovement[]
+  balances             InventoryBalance[]
+  chemicalBatches      ChemicalBatch[]
+  chemicalReceiptItems ChemicalReceiptItem[]
 
   @@unique([warehouse_id, code])
   @@map("warehouse_locations")
@@ -320,7 +331,8 @@ model Unit {
   created_by Int?
   updated_by Int?
 
-  items Item[]
+  items     Item[]
+  chemicals Chemical[]
 
   @@map("units")
 }
@@ -360,14 +372,16 @@ model Item {
   default_location   WarehouseLocation? @relation(fields: [default_location_id], references: [id])
   preferred_supplier Supplier?          @relation(fields: [preferred_supplier_id], references: [id])
 
-  receipt_lines    StockReceiptItem[]
-  issue_lines      StockIssueItem[]
-  transfer_lines   StockTransferItem[]
-  return_lines     StockReturnItem[]
-  adjustment_lines StockAdjustmentItem[]
-  stocktake_lines  StocktakeItem[]
-  movements        StockMovement[]
-  balances         InventoryBalance[]
+  receipt_lines        StockReceiptItem[]
+  issue_lines          StockIssueItem[]
+  transfer_lines       StockTransferItem[]
+  return_lines         StockReturnItem[]
+  adjustment_lines     StockAdjustmentItem[]
+  stocktake_lines      StocktakeItem[]
+  movements            StockMovement[]
+  balances             InventoryBalance[]
+  purchaseRequestItems PurchaseRequestItem[]
+  purchaseOrderItems   PurchaseOrderItem[]
 
   @@index([category_id])
   @@index([kind, status])
@@ -399,8 +413,15 @@ model Supplier {
 
   items Item[]
 
-  receipts  StockReceipt[]
-  movements StockMovement[]
+  receipts            StockReceipt[]
+  movements           StockMovement[]
+  chemicals           Chemical[]
+  chemicalBatches     ChemicalBatch[]
+  chemicalReceipts    ChemicalReceipt[]
+  supplierQuotes      SupplierQuote[]
+  purchaseOrders      PurchaseOrder[]
+  supplierEvaluations SupplierEvaluation[]
+  supplierComplaints  SupplierComplaint[]
 
   @@map("suppliers")
 }
@@ -419,6 +440,7 @@ model StockReceipt {
   posted_at         DateTime? // Ngày ghi sổ
   supplier_id       Int?
   po_number         String?   @db.VarChar(50)
+  purchase_order_id Int?
   supplier_doc_no   String?   @db.VarChar(100) // số hóa đơn / phiếu giao hàng
   deliverer_name    String?   @db.VarChar(150)
   receiver_user_id  Int?
@@ -444,12 +466,13 @@ model StockReceipt {
   cancelled_by      Int?
   cancelled_at      DateTime?
 
-  warehouse  Warehouse          @relation(fields: [warehouse_id], references: [id])
-  supplier   Supplier?          @relation(fields: [supplier_id], references: [id])
-  department Department?        @relation(fields: [department_id], references: [id])
-  creator    User               @relation("ReceiptCreator", fields: [created_by], references: [id])
-  approver   User?              @relation("ReceiptApprover", fields: [approved_by], references: [id])
-  lines      StockReceiptItem[]
+  warehouse      Warehouse          @relation(fields: [warehouse_id], references: [id])
+  supplier       Supplier?          @relation(fields: [supplier_id], references: [id])
+  department     Department?        @relation(fields: [department_id], references: [id])
+  purchase_order PurchaseOrder?     @relation(fields: [purchase_order_id], references: [id])
+  creator        User               @relation("ReceiptCreator", fields: [created_by], references: [id])
+  approver       User?              @relation("ReceiptApprover", fields: [approved_by], references: [id])
+  lines          StockReceiptItem[]
 
   @@index([status, doc_date])
   @@index([supplier_id])
@@ -462,6 +485,7 @@ model StockReceiptItem {
   line_no           Int
   item_id           Int
   location_id       Int
+  po_item_id        Int?
   qty_doc           Decimal          @db.Decimal(18, 4) // SL theo chứng từ
   qty_received      Decimal          @db.Decimal(18, 4) // SL thực nhận
   qty_accepted      Decimal          @db.Decimal(18, 4) // SL đạt – nhập tồn khả dụng
@@ -477,9 +501,10 @@ model StockReceiptItem {
   created_at        DateTime         @default(now())
   updated_at        DateTime         @updatedAt
 
-  receipt  StockReceipt      @relation(fields: [receipt_id], references: [id], onDelete: Cascade)
-  item     Item              @relation(fields: [item_id], references: [id])
-  location WarehouseLocation @relation(fields: [location_id], references: [id])
+  receipt  StockReceipt       @relation(fields: [receipt_id], references: [id], onDelete: Cascade)
+  item     Item               @relation(fields: [item_id], references: [id])
+  location WarehouseLocation  @relation(fields: [location_id], references: [id])
+  po_item  PurchaseOrderItem? @relation(fields: [po_item_id], references: [id])
 
   @@index([receipt_id])
   @@index([item_id])
@@ -972,4 +997,688 @@ model ImportBatch {
   updated_at   DateTime @updatedAt
 
   @@map("import_batches")
+}
+
+// ======================================================================
+// GIAI ĐOẠN 4 – PHÂN HỆ KHO HÓA CHẤT (tách biệt hoàn toàn với kho vật tư)
+// Quản lý theo LÔ (batch), hạn sử dụng, điều kiện bảo quản, SDS/MSDS và an toàn.
+// ======================================================================
+
+enum PhysicalState {
+  SOLID
+  LIQUID
+  GAS
+  OTHER
+}
+
+enum BatchQcStatus {
+  PENDING // Chờ kiểm tra
+  PASSED // Đạt – được phép xuất
+  QUARANTINE // Cách ly – chặn xuất
+  FAILED // Không đạt – chặn xuất
+}
+
+enum ChemLineResult {
+  PASSED // Đạt – nhập kho
+  QUARANTINE // Nhập kho cách ly
+  FAILED // Không đạt – không nhập kho
+}
+
+model Chemical {
+  id                       Int           @id @default(autoincrement())
+  code                     String        @unique @db.VarChar(50)
+  name                     String        @db.VarChar(250)
+  trade_name               String?       @db.VarChar(250)
+  name_en                  String?       @db.VarChar(250)
+  scientific_name          String?       @db.VarChar(250)
+  cas_number               String?       @db.VarChar(50)
+  formula                  String?       @db.VarChar(100)
+  concentration            String?       @db.VarChar(100)
+  chemical_group           String?       @db.VarChar(150)
+  manufacturer             String?       @db.VarChar(200)
+  supplier_id              Int?
+  unit_id                  Int
+  packaging                String?       @db.VarChar(200)
+  physical_state           PhysicalState @default(OTHER)
+  hazard_level             String?       @db.VarChar(50) // Theo SDS – do người có chuyên môn nhập
+  ghs_classification       String? // Phân loại GHS theo SDS
+  ghs_pictograms           String[]      @default([]) // GHS01..GHS09
+  hazard_statements        String? // Câu cảnh báo H
+  precautionary_statements String? // Câu phòng ngừa P
+  storage_conditions       String?
+  storage_temp_min         Decimal?      @db.Decimal(8, 2)
+  storage_temp_max         Decimal?      @db.Decimal(8, 2)
+  ventilation_req          String?
+  fire_req                 String?
+  ppe_req                  String?
+  first_aid                String? // Hướng dẫn sơ cứu / xử lý sự cố theo SDS
+  spill_response           String?
+  default_shelf_life_days  Int?
+  is_controlled            Boolean       @default(false) // Hóa chất kiểm soát đặc biệt → xuất cần HSE xác nhận
+  min_stock                Decimal       @default(0) @db.Decimal(18, 4)
+  safety_notes             String?
+  safety_verified_by       Int? // Người có chuyên môn xác nhận thông tin an toàn theo SDS
+  safety_verified_at       DateTime?
+  search_text              String        @default("")
+  status                   RecordStatus  @default(ACTIVE)
+  note                     String?
+  created_at               DateTime      @default(now())
+  updated_at               DateTime      @updatedAt
+  created_by               Int?
+  updated_by               Int?
+
+  supplier             Supplier?                @relation(fields: [supplier_id], references: [id])
+  unit                 Unit                     @relation(fields: [unit_id], references: [id])
+  batches              ChemicalBatch[]
+  documents            ChemicalSafetyDocument[]
+  chemicalReceiptItems ChemicalReceiptItem[]
+  chemicalIssueItems   ChemicalIssueItem[]
+  purchaseRequestItems PurchaseRequestItem[]
+  purchaseOrderItems   PurchaseOrderItem[]
+
+  @@index([status])
+  @@map("chemicals")
+}
+
+model ChemicalBatch {
+  id              Int           @id @default(autoincrement())
+  chemical_id     Int
+  warehouse_id    Int
+  location_id     Int
+  batch_no        String        @db.VarChar(100) // Mã lô nhà sản xuất
+  internal_code   String        @unique @db.VarChar(40) // Mã lô nội bộ (duy nhất)
+  mfg_date        DateTime?     @db.Date
+  received_date   DateTime      @db.Date
+  expiry_date     DateTime?     @db.Date
+  qty_received    Decimal       @db.Decimal(18, 4)
+  qty_on_hand     Decimal       @db.Decimal(18, 4)
+  supplier_id     Int?
+  manufacturer    String?       @db.VarChar(200)
+  storage_note    String?
+  qc_status       BatchQcStatus @default(PENDING)
+  qc_note         String?
+  abnormal        Boolean       @default(false) // Bao bì / tình trạng bảo quản bất thường
+  abnormal_note   String?
+  receipt_id      Int?
+  receipt_line_id Int?          @unique
+  created_at      DateTime      @default(now())
+  updated_at      DateTime      @updatedAt
+  created_by      Int?
+  updated_by      Int?
+
+  chemical  Chemical           @relation(fields: [chemical_id], references: [id])
+  warehouse Warehouse          @relation(fields: [warehouse_id], references: [id])
+  location  WarehouseLocation  @relation(fields: [location_id], references: [id])
+  supplier  Supplier?          @relation(fields: [supplier_id], references: [id])
+  receipt   ChemicalReceipt?   @relation(fields: [receipt_id], references: [id])
+  movements ChemicalMovement[]
+
+  @@index([chemical_id, expiry_date])
+  @@index([expiry_date])
+  @@index([qc_status])
+  @@map("chemical_batches")
+}
+
+model ChemicalReceipt {
+  id                Int       @id @default(autoincrement())
+  code              String    @unique @db.VarChar(30)
+  client_request_id String?   @unique @db.VarChar(64)
+  warehouse_id      Int
+  doc_date          DateTime  @db.Date
+  received_date     DateTime  @db.Date
+  supplier_id       Int?
+  purchase_order_id Int?
+  supplier_doc_no   String?   @db.VarChar(100)
+  deliverer_name    String?   @db.VarChar(150)
+  transport_note    String? // Điều kiện vận chuyển
+  chk_packaging     Boolean   @default(false)
+  chk_label         Boolean   @default(false)
+  chk_documents     Boolean   @default(false)
+  chk_sds           Boolean   @default(false)
+  chk_transport     Boolean   @default(false)
+  status            DocStatus @default(DRAFT) // DRAFT=Chờ kiểm tra, SUBMITTED=Chờ phê duyệt, POSTED=Đã nhập kho, REJECTED=Từ chối tiếp nhận
+  note              String?
+  reject_reason     String?
+  cancel_reason     String?
+  posted_at         DateTime?
+  created_at        DateTime  @default(now())
+  updated_at        DateTime  @updatedAt
+  created_by        Int
+  updated_by        Int?
+  submitted_at      DateTime?
+  approved_by       Int?
+  approved_at       DateTime?
+  cancelled_by      Int?
+  cancelled_at      DateTime?
+
+  warehouse      Warehouse             @relation(fields: [warehouse_id], references: [id])
+  supplier       Supplier?             @relation(fields: [supplier_id], references: [id])
+  purchase_order PurchaseOrder?        @relation(fields: [purchase_order_id], references: [id])
+  creator        User                  @relation("ChemReceiptCreator", fields: [created_by], references: [id])
+  lines          ChemicalReceiptItem[]
+  batches        ChemicalBatch[]
+
+  @@index([status, doc_date])
+  @@map("chemical_receipts")
+}
+
+model ChemicalReceiptItem {
+  id             Int            @id @default(autoincrement())
+  receipt_id     Int
+  line_no        Int
+  chemical_id    Int
+  location_id    Int
+  po_item_id     Int?
+  batch_no       String?        @db.VarChar(100)
+  mfg_date       DateTime?      @db.Date
+  expiry_date    DateTime?      @db.Date
+  qty_doc        Decimal        @db.Decimal(18, 4)
+  qty_received   Decimal        @db.Decimal(18, 4)
+  result         ChemLineResult @default(PASSED)
+  packaging_ok   Boolean        @default(true)
+  label_ok       Boolean        @default(true)
+  condition_note String?
+  unit_price     Decimal?       @db.Decimal(18, 4)
+  note           String?
+  created_at     DateTime       @default(now())
+  updated_at     DateTime       @updatedAt
+
+  receipt  ChemicalReceipt    @relation(fields: [receipt_id], references: [id], onDelete: Cascade)
+  chemical Chemical           @relation(fields: [chemical_id], references: [id])
+  location WarehouseLocation  @relation(fields: [location_id], references: [id])
+  po_item  PurchaseOrderItem? @relation(fields: [po_item_id], references: [id])
+
+  @@index([receipt_id])
+  @@map("chemical_receipt_items")
+}
+
+model ChemicalIssue {
+  id                   Int       @id @default(autoincrement())
+  code                 String    @unique @db.VarChar(30)
+  client_request_id    String?   @unique @db.VarChar(64)
+  warehouse_id         Int
+  doc_date             DateTime  @db.Date
+  department_id        Int
+  requester_id         Int
+  purpose              String
+  work_area            String    @db.VarChar(200)
+  responsible_person   String    @db.VarChar(150) // Người chịu trách nhiệm sử dụng
+  requires_hse         Boolean   @default(false)
+  hse_confirmed_by     Int?
+  hse_confirmed_at     DateTime?
+  hse_note             String?
+  receiver_name        String?   @db.VarChar(150)
+  receiver_user_id     Int?
+  receive_confirmed_at DateTime?
+  receive_signature    String?   @db.VarChar(150)
+  status               DocStatus @default(DRAFT)
+  note                 String?
+  reject_reason        String?
+  cancel_reason        String?
+  issued_at            DateTime?
+  issued_by            Int?
+  created_at           DateTime  @default(now())
+  updated_at           DateTime  @updatedAt
+  created_by           Int
+  updated_by           Int?
+  submitted_at         DateTime?
+  approved_by          Int?
+  approved_at          DateTime?
+  cancelled_by         Int?
+  cancelled_at         DateTime?
+
+  warehouse  Warehouse           @relation(fields: [warehouse_id], references: [id])
+  department Department          @relation(fields: [department_id], references: [id])
+  requester  User                @relation("ChemIssueRequester", fields: [requester_id], references: [id])
+  lines      ChemicalIssueItem[]
+
+  @@index([status, doc_date])
+  @@map("chemical_issues")
+}
+
+model ChemicalIssueItem {
+  id            Int      @id @default(autoincrement())
+  issue_id      Int
+  line_no       Int
+  chemical_id   Int
+  qty_requested Decimal  @db.Decimal(18, 4)
+  qty_approved  Decimal? @db.Decimal(18, 4)
+  qty_issued    Decimal? @db.Decimal(18, 4)
+  batch_detail  Json? // [{batch_id, internal_code, batch_no, expiry_date, qty}]
+  note          String?
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  issue    ChemicalIssue @relation(fields: [issue_id], references: [id], onDelete: Cascade)
+  chemical Chemical      @relation(fields: [chemical_id], references: [id])
+
+  @@index([issue_id])
+  @@map("chemical_issue_items")
+}
+
+// Sổ cái hóa chất theo lô – BẤT BIẾN
+model ChemicalMovement {
+  id            BigInt   @id @default(autoincrement())
+  batch_id      Int
+  chemical_id   Int
+  warehouse_id  Int
+  location_id   Int
+  movement_type String   @db.VarChar(20) // RECEIPT, ISSUE, ADJUSTMENT, STOCKTAKE, DISPOSAL
+  qty_in        Decimal  @default(0) @db.Decimal(18, 4)
+  qty_out       Decimal  @default(0) @db.Decimal(18, 4)
+  balance_after Decimal  @db.Decimal(18, 4) // tồn của lô sau giao dịch
+  doc_type      String   @db.VarChar(30)
+  doc_id        Int
+  doc_code      String   @db.VarChar(30)
+  doc_date      DateTime @db.Date
+  posted_at     DateTime @default(now())
+  department_id Int?
+  user_id       Int
+  note          String?
+  created_at    DateTime @default(now())
+
+  batch ChemicalBatch @relation(fields: [batch_id], references: [id])
+
+  @@index([chemical_id, posted_at])
+  @@index([batch_id, posted_at])
+  @@index([doc_type, doc_id])
+  @@map("chemical_movements")
+}
+
+model ChemicalSafetyDocument {
+  id            Int       @id @default(autoincrement())
+  chemical_id   Int
+  doc_type      String    @db.VarChar(30) // SDS, TECH, COA, PACKAGING, INCIDENT_GUIDE
+  title         String    @db.VarChar(250)
+  version       String?   @db.VarChar(50)
+  language      String?   @db.VarChar(20)
+  issue_date    DateTime? @db.Date
+  review_date   DateTime? @db.Date // Ngày cần rà soát/hết hiệu lực
+  attachment_id Int?
+  verified_by   Int?
+  verified_at   DateTime?
+  status        String    @default("ACTIVE") @db.VarChar(20) // ACTIVE | SUPERSEDED
+  note          String?
+  created_at    DateTime  @default(now())
+  updated_at    DateTime  @updatedAt
+  created_by    Int
+
+  chemical Chemical @relation(fields: [chemical_id], references: [id])
+
+  @@index([chemical_id, doc_type])
+  @@map("chemical_safety_documents")
+}
+
+// Yêu cầu lưu trữ: cặp hóa chất KHÔNG tương thích – chỉ cảnh báo khi đã được chuyên gia xác nhận
+model ChemicalStorageRequirement {
+  id            Int          @id @default(autoincrement())
+  chemical_a_id Int
+  chemical_b_id Int
+  rule          String       @default("INCOMPATIBLE") @db.VarChar(30)
+  description   String
+  source_ref    String?      @db.VarChar(200) // Mục SDS / tài liệu căn cứ
+  verified_by   Int?
+  verified_at   DateTime?
+  status        RecordStatus @default(ACTIVE)
+  created_at    DateTime     @default(now())
+  updated_at    DateTime     @updatedAt
+  created_by    Int
+
+  @@unique([chemical_a_id, chemical_b_id])
+  @@map("chemical_storage_requirements")
+}
+
+model ChemicalInspection {
+  id                Int      @id @default(autoincrement())
+  code              String   @unique @db.VarChar(30)
+  warehouse_id      Int
+  inspected_at      DateTime
+  inspector_id      Int
+  temperature       Decimal? @db.Decimal(6, 2)
+  humidity          Decimal? @db.Decimal(6, 2)
+  ventilation_ok    Boolean
+  fire_equipment_ok Boolean
+  spill_kit_ok      Boolean
+  labeling_ok       Boolean
+  segregation_ok    Boolean
+  ppe_ok            Boolean
+  findings          String?
+  actions           String?
+  result            String   @db.VarChar(20) // PASS | ISSUES
+  created_at        DateTime @default(now())
+  updated_at        DateTime @updatedAt
+
+  @@index([inspected_at])
+  @@map("chemical_inspections")
+}
+
+model ChemicalIncident {
+  id            Int       @id @default(autoincrement())
+  code          String    @unique @db.VarChar(30)
+  occurred_at   DateTime
+  warehouse_id  Int?
+  location_text String?   @db.VarChar(200)
+  chemical_id   Int?
+  batch_id      Int?
+  incident_type String    @db.VarChar(30) // SPILL, LEAK, FIRE, EXPOSURE, PACKAGING, OTHER
+  severity      String    @db.VarChar(20) // LOW, MEDIUM, HIGH, CRITICAL
+  description   String
+  actions_taken String? // Biện pháp đã thực hiện (theo SDS / người phụ trách)
+  injuries      String?
+  reported_by   Int
+  handled_by    Int?
+  status        String    @default("OPEN") @db.VarChar(20) // OPEN | CLOSED
+  closed_at     DateTime?
+  close_note    String?
+  created_at    DateTime  @default(now())
+  updated_at    DateTime  @updatedAt
+
+  @@index([occurred_at])
+  @@map("chemical_incidents")
+}
+
+model ChemicalStocktake {
+  id            Int       @id @default(autoincrement())
+  code          String    @unique @db.VarChar(30)
+  warehouse_id  Int
+  name          String    @db.VarChar(200)
+  snapshot_at   DateTime?
+  status        DocStatus @default(DRAFT)
+  note          String?
+  reject_reason String?
+  created_at    DateTime  @default(now())
+  updated_at    DateTime  @updatedAt
+  created_by    Int
+  submitted_at  DateTime?
+  approved_by   Int?
+  approved_at   DateTime?
+
+  lines ChemicalStocktakeItem[]
+
+  @@map("chemical_stocktakes")
+}
+
+model ChemicalStocktakeItem {
+  id             Int       @id @default(autoincrement())
+  stocktake_id   Int
+  batch_id       Int
+  book_qty       Decimal   @db.Decimal(18, 4)
+  counted_qty    Decimal?  @db.Decimal(18, 4)
+  packaging_ok   Boolean?
+  packaging_note String?
+  reason         String?
+  counted_by     Int?
+  counted_at     DateTime?
+  created_at     DateTime  @default(now())
+  updated_at     DateTime  @updatedAt
+
+  stocktake ChemicalStocktake @relation(fields: [stocktake_id], references: [id], onDelete: Cascade)
+
+  @@unique([stocktake_id, batch_id])
+  @@map("chemical_stocktake_items")
+}
+
+// Điều chỉnh / tiêu hủy theo lô (hóa chất hết hạn, không đạt...) – cần phê duyệt
+model ChemicalAdjustment {
+  id              Int       @id @default(autoincrement())
+  code            String    @unique @db.VarChar(30)
+  warehouse_id    Int
+  adj_type        String    @db.VarChar(20) // ADJUSTMENT | DISPOSAL | STOCKTAKE
+  stocktake_id    Int?      @unique
+  doc_date        DateTime  @db.Date
+  reason          String
+  disposal_method String? // Phương thức tiêu hủy theo SDS / đơn vị xử lý
+  status          DocStatus @default(DRAFT)
+  reject_reason   String?
+  cancel_reason   String?
+  posted_at       DateTime?
+  created_at      DateTime  @default(now())
+  updated_at      DateTime  @updatedAt
+  created_by      Int
+  submitted_at    DateTime?
+  approved_by     Int?
+  approved_at     DateTime?
+
+  lines ChemicalAdjustmentItem[]
+
+  @@map("chemical_adjustments")
+}
+
+model ChemicalAdjustmentItem {
+  id            Int      @id @default(autoincrement())
+  adjustment_id Int
+  line_no       Int
+  batch_id      Int
+  qty_delta     Decimal  @db.Decimal(18, 4)
+  reason        String?
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  adjustment ChemicalAdjustment @relation(fields: [adjustment_id], references: [id], onDelete: Cascade)
+
+  @@map("chemical_adjustment_items")
+}
+
+// ======================================================================
+// GIAI ĐOẠN 5 – MUA HÀNG & NHÀ CUNG CẤP
+// Đề nghị mua → Yêu cầu báo giá → Đơn đặt hàng → Phiếu nhập kho (mỏ / hóa chất)
+// ======================================================================
+
+enum PurchaseStatus {
+  DRAFT // Nháp
+  SUBMITTED // Chờ duyệt
+  APPROVED // Đã duyệt
+  REJECTED // Từ chối
+  ORDERED // (Đề nghị) đã lập đơn đặt hàng
+  SENT // (PO) đã gửi nhà cung cấp
+  PARTIAL // Giao hàng một phần
+  RECEIVED // Đã giao đủ
+  CLOSED // Đã đóng
+  CANCELLED // Đã hủy
+}
+
+model PurchaseRequest {
+  id                Int            @id @default(autoincrement())
+  code              String         @unique @db.VarChar(30)
+  client_request_id String?        @unique @db.VarChar(64)
+  request_date      DateTime       @db.Date
+  department_id     Int
+  requester_id      Int
+  purpose           String
+  priority          String         @default("NORMAL") @db.VarChar(20) // LOW, NORMAL, HIGH, URGENT
+  needed_date       DateTime?      @db.Date
+  status            PurchaseStatus @default(DRAFT)
+  note              String?
+  reject_reason     String?
+  cancel_reason     String?
+  created_at        DateTime       @default(now())
+  updated_at        DateTime       @updatedAt
+  created_by        Int
+  updated_by        Int?
+  submitted_at      DateTime?
+  approved_by       Int?
+  approved_at       DateTime?
+
+  department Department            @relation(fields: [department_id], references: [id])
+  requester  User                  @relation("PrRequester", fields: [requester_id], references: [id])
+  lines      PurchaseRequestItem[]
+  quotes     SupplierQuote[]
+
+  @@index([status])
+  @@map("purchase_requests")
+}
+
+model PurchaseRequestItem {
+  id          Int       @id @default(autoincrement())
+  request_id  Int
+  line_no     Int
+  item_id     Int?
+  chemical_id Int?
+  description String?   @db.VarChar(300)
+  qty         Decimal   @db.Decimal(18, 4)
+  unit_code   String?   @db.VarChar(20)
+  needed_date DateTime? @db.Date
+  note        String?
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+
+  request  PurchaseRequest @relation(fields: [request_id], references: [id], onDelete: Cascade)
+  item     Item?           @relation(fields: [item_id], references: [id])
+  chemical Chemical?       @relation(fields: [chemical_id], references: [id])
+
+  @@index([request_id])
+  @@map("purchase_request_items")
+}
+
+model SupplierQuote {
+  id            Int       @id @default(autoincrement())
+  code          String    @unique @db.VarChar(30)
+  request_id    Int?
+  supplier_id   Int
+  quote_no      String?   @db.VarChar(100) // Số báo giá của NCC
+  requested_at  DateTime  @db.Date
+  quote_date    DateTime? @db.Date
+  valid_until   DateTime? @db.Date
+  currency      String?   @db.VarChar(10)
+  delivery_days Int?
+  payment_terms String?
+  status        String    @default("REQUESTED") @db.VarChar(20) // REQUESTED, RECEIVED, SELECTED, REJECTED
+  note          String?
+  created_at    DateTime  @default(now())
+  updated_at    DateTime  @updatedAt
+  created_by    Int
+
+  request  PurchaseRequest?    @relation(fields: [request_id], references: [id])
+  supplier Supplier            @relation(fields: [supplier_id], references: [id])
+  lines    SupplierQuoteItem[]
+
+  @@index([request_id])
+  @@map("supplier_quotes")
+}
+
+model SupplierQuoteItem {
+  id          Int      @id @default(autoincrement())
+  quote_id    Int
+  pr_item_id  Int?
+  item_id     Int?
+  chemical_id Int?
+  qty         Decimal  @db.Decimal(18, 4)
+  unit_price  Decimal? @db.Decimal(18, 4)
+  note        String?
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  quote SupplierQuote @relation(fields: [quote_id], references: [id], onDelete: Cascade)
+
+  @@map("supplier_quote_items")
+}
+
+model PurchaseOrder {
+  id                Int            @id @default(autoincrement())
+  code              String         @unique @db.VarChar(30)
+  client_request_id String?        @unique @db.VarChar(64)
+  supplier_id       Int
+  request_id        Int?
+  quote_id          Int?
+  order_date        DateTime       @db.Date
+  expected_date     DateTime?      @db.Date
+  currency          String?        @db.VarChar(10)
+  exchange_rate     Decimal?       @db.Decimal(18, 6)
+  payment_terms     String?
+  delivery_terms    String?
+  total_amount      Decimal        @default(0) @db.Decimal(20, 4)
+  status            PurchaseStatus @default(DRAFT)
+  note              String?
+  reject_reason     String?
+  cancel_reason     String?
+  close_reason      String?
+  created_at        DateTime       @default(now())
+  updated_at        DateTime       @updatedAt
+  created_by        Int
+  updated_by        Int?
+  submitted_at      DateTime?
+  approved_by       Int?
+  approved_at       DateTime?
+  sent_at           DateTime?
+  completed_at      DateTime?
+
+  supplier          Supplier            @relation(fields: [supplier_id], references: [id])
+  creator           User                @relation("PoCreator", fields: [created_by], references: [id])
+  lines             PurchaseOrderItem[]
+  stock_receipts    StockReceipt[]
+  chemical_receipts ChemicalReceipt[]
+
+  @@index([status])
+  @@index([supplier_id])
+  @@map("purchase_orders")
+}
+
+model PurchaseOrderItem {
+  id           Int      @id @default(autoincrement())
+  order_id     Int
+  line_no      Int
+  pr_item_id   Int?
+  item_id      Int?
+  chemical_id  Int?
+  description  String?  @db.VarChar(300)
+  qty_ordered  Decimal  @db.Decimal(18, 4)
+  qty_received Decimal  @default(0) @db.Decimal(18, 4)
+  unit_price   Decimal  @default(0) @db.Decimal(18, 4)
+  amount       Decimal  @default(0) @db.Decimal(20, 4)
+  note         String?
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  order         PurchaseOrder         @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  item          Item?                 @relation(fields: [item_id], references: [id])
+  chemical      Chemical?             @relation(fields: [chemical_id], references: [id])
+  receipt_lines StockReceiptItem[]
+  chem_lines    ChemicalReceiptItem[]
+
+  @@index([order_id])
+  @@map("purchase_order_items")
+}
+
+model SupplierEvaluation {
+  id             Int      @id @default(autoincrement())
+  supplier_id    Int
+  period_from    DateTime @db.Date
+  period_to      DateTime @db.Date
+  quality_score  Int
+  delivery_score Int
+  price_score    Int
+  service_score  Int
+  total_score    Decimal  @db.Decimal(5, 2)
+  classification String   @db.VarChar(20) // A, B, C, D
+  metrics        Json? // số liệu thống kê tại thời điểm đánh giá
+  comment        String?
+  evaluator_id   Int
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+
+  supplier Supplier @relation(fields: [supplier_id], references: [id])
+
+  @@index([supplier_id])
+  @@map("supplier_evaluations")
+}
+
+model SupplierComplaint {
+  id             Int       @id @default(autoincrement())
+  code           String    @unique @db.VarChar(30)
+  supplier_id    Int
+  complaint_date DateTime  @db.Date
+  subject        String    @db.VarChar(250)
+  description    String
+  related_doc    String?   @db.VarChar(60)
+  status         String    @default("OPEN") @db.VarChar(20)
+  resolution     String?
+  resolved_at    DateTime?
+  created_at     DateTime  @default(now())
+  updated_at     DateTime  @updatedAt
+  created_by     Int
+
+  supplier Supplier @relation(fields: [supplier_id], references: [id])
+
+  @@index([supplier_id])
+  @@map("supplier_complaints")
 }

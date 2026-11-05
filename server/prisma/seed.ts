@@ -15,7 +15,9 @@ import { normalizeText } from '../src/lib/text';
 const prisma = new PrismaClient();
 
 async function main() {
-  // 1. Quyền
+  // 1. Quyền – ghi nhận quyền MỚI xuất hiện ở bản cập nhật này
+  const existingCodes = new Set((await prisma.permission.findMany({ select: { code: true } })).map((p) => p.code));
+  const freshInstall = existingCodes.size === 0;
   for (const p of PERMISSIONS) {
     await prisma.permission.upsert({ where: { code: p.code }, create: p, update: { module: p.module, name: p.name } });
   }
@@ -31,6 +33,14 @@ async function main() {
       console.log('  + vai trò', r.code);
     } else if (r.code === 'SUPER_ADMIN') {
       await prisma.rolePermission.createMany({ data: allPerms.map((p) => ({ role_id: role!.id, permission_id: p.id })), skipDuplicates: true });
+    } else if (!freshInstall) {
+      // Vai trò đã có: chỉ cấp các quyền của MODULE MỚI (quyền vừa được tạo trong lần cập nhật này) theo mặc định.
+      // Không đụng tới các quyền cũ mà quản trị đã tùy chỉnh.
+      const added = r.permissions.filter((c) => !existingCodes.has(c) && permId.has(c));
+      if (added.length) {
+        await prisma.rolePermission.createMany({ data: added.map((c) => ({ role_id: role!.id, permission_id: permId.get(c)! })), skipDuplicates: true });
+        console.log(`  + ${r.code}: cấp ${added.length} quyền mới`);
+      }
     }
   }
 
@@ -78,7 +88,7 @@ async function main() {
     await prisma.department.createMany({ data: depts.map(([code, name]) => ({ code, name })) });
   }
 
-  if (process.env.SEED_DEMO === 'true') await demo();
+  if (process.env.SEED_DEMO === 'true') { await demo(); await demoChemicals(); }
   console.log('Seed hoàn tất.');
 }
 
@@ -118,6 +128,43 @@ async function demo() {
   await prisma.supplier.create({ data: { code: 'NCC001', name: 'Công ty TNHH Thiết bị Mỏ Miền Bắc', country: 'Việt Nam', search_text: normalizeText('Công ty TNHH Thiết bị Mỏ Miền Bắc NCC001') } });
   await prisma.supplier.create({ data: { code: 'NCC002', name: 'Công ty CP Vật tư Công nghiệp Sài Gòn', country: 'Việt Nam', search_text: normalizeText('Công ty CP Vật tư Công nghiệp Sài Gòn NCC002') } });
   console.log('  + dữ liệu demo (mật khẩu demo: Demo@2026)');
+}
+
+/** Demo kho hóa chất – thông tin nguy hiểm để TRỐNG (phải nhập theo SDS bởi người có chuyên môn) */
+async function demoChemicals() {
+  if ((await prisma.chemical.count()) > 0) return;
+  const pw = await bcrypt.hash('Demo@2026', 10);
+  const role = (await prisma.role.findUniqueOrThrow({ where: { code: 'CHEMICAL_STORE_OFFICER' } })).id;
+  if (!(await prisma.user.findUnique({ where: { username: 'khohc' } }))) {
+    await prisma.user.create({ data: { username: 'khohc', full_name: 'Đặng Kho Hóa Chất', password_hash: pw, must_change_password: false, roles: { create: [{ role_id: role }] } } });
+  }
+  const plant = await prisma.department.findUnique({ where: { code: 'PLANT' } });
+  const r2 = (await prisma.role.findUniqueOrThrow({ where: { code: 'DEPARTMENT_USER' } })).id;
+  if (plant && !(await prisma.user.findUnique({ where: { username: 'nhamay' } }))) {
+    await prisma.user.create({ data: { username: 'nhamay', full_name: 'Lý Nhà Máy', password_hash: pw, must_change_password: false, department_id: plant.id, roles: { create: [{ role_id: r2 }] } } });
+  }
+  const wh = await prisma.warehouse.findFirstOrThrow({ where: { type: 'CHEMICAL' } });
+  if ((await prisma.warehouseLocation.count({ where: { warehouse_id: wh.id } })) === 0) {
+    await prisma.warehouseLocation.createMany({ data: [
+      { warehouse_id: wh.id, code: 'HC-NHAN', name: 'Khu tiếp nhận / cách ly hóa chất', zone: 'Cách ly' },
+      { warehouse_id: wh.id, code: 'HC-A1', name: 'Khu A – Kệ 1', zone: 'A' },
+      { warehouse_id: wh.id, code: 'HC-A2', name: 'Khu A – Kệ 2', zone: 'A' },
+      { warehouse_id: wh.id, code: 'HC-B1', name: 'Khu B – Kệ 1 (tách riêng)', zone: 'B' },
+    ] });
+  }
+  const kg = (await prisma.unit.findUniqueOrThrow({ where: { code: 'KG' } })).id;
+  const lit = (await prisma.unit.findUniqueOrThrow({ where: { code: 'LIT' } })).id;
+  const list: [string, string, string | null, number, boolean, number][] = [
+    ['HC-0001', 'Natri xyanua (NaCN)', '143-33-9', kg, true, 500],
+    ['HC-0002', 'Vôi bột (CaO)', '1305-78-8', kg, false, 1000],
+    ['HC-0003', 'Axit clohydric (HCl) 32%', '7647-01-0', lit, false, 200],
+    ['HC-0004', 'Natri hydroxit (NaOH)', '1310-73-2', kg, false, 300],
+    ['HC-0005', 'Than hoạt tính', '7440-44-0', kg, false, 200],
+  ];
+  for (const [code, name, cas, unit, ctrl, min] of list) {
+    await prisma.chemical.create({ data: { code, name, cas_number: cas, unit_id: unit, is_controlled: ctrl, min_stock: min, default_shelf_life_days: 730, safety_notes: 'Thông tin an toàn phải nhập theo SDS/MSDS của nhà sản xuất và được HSE xác nhận.', search_text: normalizeText(name, code, cas) } });
+  }
+  console.log('  + dữ liệu demo kho hóa chất (khohc, nhamay / Demo@2026)');
 }
 
 main()

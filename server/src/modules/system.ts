@@ -27,6 +27,15 @@ const settingSchemas: Record<string, z.ZodTypeAny> = {
   'currency.allowed': z.array(z.string().min(3).max(3)),
   'upload.max_mb': z.coerce.number().int().min(1).max(100),
   'issue.require_quota_note': z.boolean(),
+  'chemical.require_batch': z.boolean(),
+  'chemical.require_expiry': z.boolean(),
+  'chemical.require_mfg_date': z.boolean(),
+  'chemical.require_sds': z.boolean(),
+  'chemical.require_safety_verified': z.boolean(),
+  'chemical.fefo': z.boolean(),
+  'chemical.expiry_alert_days': z.array(z.coerce.number().int().min(1).max(3650)).min(1).max(5),
+  'chemical.long_storage_days': z.coerce.number().int().min(30).max(3650),
+  'purchase.require_quote_count': z.coerce.number().int().min(0).max(10),
 };
 
 settingsRouter.put('/', requirePerm('settings.manage', 'period.lock'), async (req, res) => {

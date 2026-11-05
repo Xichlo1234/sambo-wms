@@ -44,6 +44,30 @@ export const PERMISSIONS: { code: string; module: string; name: string }[] = [
   { code: 'stocktakes.create', module: 'Kiểm kê', name: 'Tạo đợt kiểm kê, chốt tồn sổ' },
   { code: 'stocktakes.count', module: 'Kiểm kê', name: 'Nhập số kiểm đếm, giải trình' },
   { code: 'stocktakes.approve', module: 'Kiểm kê', name: 'Phê duyệt kết quả kiểm kê' },
+  // Kho hóa chất (phân hệ riêng)
+  { code: 'chemicals.view', module: 'Kho hóa chất', name: 'Xem danh mục, lô, tồn kho hóa chất' },
+  { code: 'chemicals.manage', module: 'Kho hóa chất', name: 'Tạo/sửa danh mục hóa chất, tài liệu SDS' },
+  { code: 'chemicals.safety_verify', module: 'Kho hóa chất', name: 'Xác nhận thông tin an toàn, SDS, quy tắc lưu trữ (chuyên môn HSE)' },
+  { code: 'chemicals.receipt_create', module: 'Kho hóa chất', name: 'Lập phiếu nhập hóa chất, kiểm tra tiếp nhận' },
+  { code: 'chemicals.receipt_approve', module: 'Kho hóa chất', name: 'Phê duyệt nhập kho hóa chất' },
+  { code: 'chemicals.request', module: 'Kho hóa chất', name: 'Lập yêu cầu sử dụng hóa chất' },
+  { code: 'chemicals.issue_approve', module: 'Kho hóa chất', name: 'Phê duyệt yêu cầu sử dụng hóa chất' },
+  { code: 'chemicals.hse_confirm', module: 'Kho hóa chất', name: 'Xác nhận an toàn cho hóa chất kiểm soát đặc biệt' },
+  { code: 'chemicals.issue', module: 'Kho hóa chất', name: 'Thực hiện xuất hóa chất theo lô' },
+  { code: 'chemicals.batch_status', module: 'Kho hóa chất', name: 'Cách ly / giải phóng / đánh dấu lô không đạt' },
+  { code: 'chemicals.stocktake', module: 'Kho hóa chất', name: 'Kiểm kê hóa chất theo lô' },
+  { code: 'chemicals.adjust', module: 'Kho hóa chất', name: 'Lập điều chỉnh / tiêu hủy lô hóa chất' },
+  { code: 'chemicals.approve_adjust', module: 'Kho hóa chất', name: 'Phê duyệt kiểm kê, điều chỉnh, tiêu hủy hóa chất' },
+  { code: 'chemicals.inspection', module: 'Kho hóa chất', name: 'Ghi nhật ký kiểm tra kho hóa chất' },
+  { code: 'chemicals.incident', module: 'Kho hóa chất', name: 'Ghi / xử lý nhật ký sự cố hóa chất' },
+  // Mua hàng
+  { code: 'purchase.view', module: 'Mua hàng', name: 'Xem đề nghị mua, báo giá, đơn đặt hàng' },
+  { code: 'purchase.request', module: 'Mua hàng', name: 'Lập đề nghị mua hàng' },
+  { code: 'purchase.request_approve', module: 'Mua hàng', name: 'Phê duyệt đề nghị mua hàng' },
+  { code: 'purchase.order', module: 'Mua hàng', name: 'Lập yêu cầu báo giá, đơn đặt hàng, theo dõi giao hàng' },
+  { code: 'purchase.order_approve', module: 'Mua hàng', name: 'Phê duyệt đơn đặt hàng' },
+  { code: 'purchase.view_value', module: 'Mua hàng', name: 'Xem đơn giá, giá trị mua hàng' },
+  { code: 'suppliers.evaluate', module: 'Nhà cung cấp', name: 'Đánh giá nhà cung cấp, ghi khiếu nại' },
   // Nhà cung cấp, bộ phận
   { code: 'suppliers.view', module: 'Nhà cung cấp', name: 'Xem nhà cung cấp' },
   { code: 'suppliers.manage', module: 'Nhà cung cấp', name: 'Tạo/sửa/khóa nhà cung cấp' },
@@ -68,6 +92,7 @@ export const PERMISSIONS: { code: string; module: string; name: string }[] = [
 
 const ALL = PERMISSIONS.map((p) => p.code);
 const VIEW_STOCK = ['dashboard.view', 'items.view', 'stock.view', 'suppliers.view', 'departments.view'];
+const CHEM_VIEW = ['chemicals.view'];
 
 /** Vai trò mặc định – Super Admin có thể chỉnh sửa trong giao diện Phân quyền. */
 export const DEFAULT_ROLES: { code: string; name: string; description: string; permissions: string[] }[] = [
@@ -79,7 +104,9 @@ export const DEFAULT_ROLES: { code: string; name: string; description: string; p
       'issues.view', 'issues.view_all', 'issues.approve', 'issues.issue', 'issues.cancel',
       'transfers.view', 'transfers.approve', 'returns.view', 'returns.inspect', 'returns.approve',
       'adjustments.view', 'adjustments.approve', 'stocktakes.view', 'stocktakes.create', 'stocktakes.approve',
-      'reports.view', 'reports.export', 'attachments.upload', 'audit.view', 'period.lock'],
+      'reports.view', 'reports.export', 'attachments.upload', 'audit.view', 'period.lock',
+      ...CHEM_VIEW, 'chemicals.receipt_approve', 'chemicals.issue_approve', 'chemicals.approve_adjust', 'chemicals.batch_status',
+      'purchase.view', 'purchase.request', 'purchase.request_approve'],
   },
   {
     code: 'WAREHOUSE_OFFICER', name: 'Warehouse Officer', description: 'Lập phiếu nhập/xuất, kiểm kê, quản lý tồn (không tự duyệt)',
@@ -88,32 +115,38 @@ export const DEFAULT_ROLES: { code: string; name: string; description: string; p
       'issues.view', 'issues.view_all', 'issues.issue', 'issues.cancel',
       'transfers.view', 'transfers.create', 'returns.view', 'returns.create', 'returns.inspect',
       'adjustments.view', 'adjustments.create', 'stocktakes.view', 'stocktakes.create', 'stocktakes.count',
-      'reports.view', 'reports.export', 'attachments.upload', 'attachments.delete'],
+      'reports.view', 'reports.export', 'attachments.upload', 'attachments.delete', 'purchase.view', 'purchase.request'],
   },
   {
     code: 'PROCUREMENT_OFFICER', name: 'Procurement Officer', description: 'Quản lý nhà cung cấp, mua hàng',
-    permissions: [...VIEW_STOCK, 'suppliers.manage', 'suppliers.view_sensitive', 'receipts.view', 'reports.view', 'reports.export', 'attachments.upload', 'import.run'],
+    permissions: [...VIEW_STOCK, 'suppliers.manage', 'suppliers.view_sensitive', 'suppliers.evaluate', 'receipts.view', 'reports.view', 'reports.export', 'attachments.upload', 'import.run',
+      ...CHEM_VIEW, 'purchase.view', 'purchase.request', 'purchase.order', 'purchase.view_value'],
   },
   {
     code: 'DEPARTMENT_USER', name: 'Department User', description: 'Tạo yêu cầu cấp vật tư/hóa chất, xem lịch sử bộ phận',
-    permissions: ['dashboard.view', 'items.view', 'stock.view', 'issues.view', 'issues.create', 'issues.confirm', 'returns.view', 'returns.create'],
+    permissions: ['dashboard.view', 'items.view', 'stock.view', 'issues.view', 'issues.create', 'issues.confirm', 'returns.view', 'returns.create',
+      'chemicals.view', 'chemicals.request', 'purchase.view', 'purchase.request'],
   },
   {
     code: 'CHEMICAL_STORE_OFFICER', name: 'Chemical Store Officer', description: 'Quản lý kho hóa chất (phân hệ 5.2)',
-    permissions: [...VIEW_STOCK, 'reports.view', 'reports.export', 'attachments.upload'],
+    permissions: [...VIEW_STOCK, 'reports.view', 'reports.export', 'attachments.upload', 'attachments.delete', ...CHEM_VIEW, 'chemicals.manage',
+      'chemicals.receipt_create', 'chemicals.issue', 'chemicals.batch_status', 'chemicals.stocktake', 'chemicals.adjust', 'chemicals.inspection',
+      'chemicals.incident', 'purchase.view', 'purchase.request'],
   },
   {
     code: 'HSE_OFFICER', name: 'HSE/Chemical Safety Officer', description: 'Kiểm tra hồ sơ an toàn hóa chất, SDS/MSDS',
-    permissions: [...VIEW_STOCK, 'reports.view'],
+    permissions: [...VIEW_STOCK, 'reports.view', 'reports.export', 'attachments.upload', ...CHEM_VIEW, 'chemicals.safety_verify', 'chemicals.hse_confirm',
+      'chemicals.batch_status', 'chemicals.inspection', 'chemicals.incident'],
   },
   {
     code: 'ACCOUNTANT', name: 'Accountant', description: 'Xem báo cáo NXT, kiểm tra chứng từ, đối chiếu số liệu',
     permissions: [...VIEW_STOCK, 'stock.view_value', 'receipts.view', 'issues.view', 'issues.view_all', 'transfers.view',
-      'returns.view', 'adjustments.view', 'stocktakes.view', 'reports.view', 'reports.export'],
+      'returns.view', 'adjustments.view', 'stocktakes.view', 'reports.view', 'reports.export', ...CHEM_VIEW, 'purchase.view', 'purchase.view_value'],
   },
   {
     code: 'DIRECTOR', name: 'Director', description: 'Xem Dashboard, báo cáo tổng hợp, phê duyệt theo thẩm quyền',
     permissions: [...VIEW_STOCK, 'stock.view_value', 'receipts.view', 'issues.view', 'issues.view_all', 'transfers.view',
-      'returns.view', 'adjustments.view', 'stocktakes.view', 'reports.view', 'reports.export', 'audit.view'],
+      'returns.view', 'adjustments.view', 'stocktakes.view', 'reports.view', 'reports.export', 'audit.view', ...CHEM_VIEW,
+      'purchase.view', 'purchase.view_value', 'purchase.order_approve', 'purchase.request_approve'],
   },
 ];

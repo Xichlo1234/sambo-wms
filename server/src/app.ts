@@ -28,6 +28,11 @@ import importRouter from './modules/import';
 import backupRouter from './modules/backup';
 import printRouter from './modules/print';
 import { settingsRouter, auditRouter, notificationsRouter } from './modules/system';
+import { chemicalsRouter, batchesRouter, chemSafetyRouter } from './modules/chemicals';
+import chemReceiptsRouter from './modules/chemReceipts';
+import chemIssuesRouter from './modules/chemIssues';
+import { chemStocktakesRouter, chemAdjustmentsRouter, chemInspectionsRouter, chemIncidentsRouter } from './modules/chemOps';
+import { prRouter, quotesRouter, poRouter, supplierExtraRouter } from './modules/purchasing';
 
 // Decimal (số lượng/đơn giá) trả về JSON dạng số – Decimal(18,4) nằm trong độ chính xác của số thực 64-bit
 (Prisma.Decimal.prototype as unknown as { toJSON: () => number }).toJSON = function (this: Prisma.Decimal) {
@@ -83,7 +88,20 @@ export function createApp() {
   api.use('/warehouses', warehousesRouter);
   api.use('/locations', locationsRouter);
   api.use('/departments', departmentsRouter);
+  api.use('/suppliers', supplierExtraRouter);
   api.use('/suppliers', suppliersRouter);
+  api.use('/chemicals', chemicalsRouter);
+  api.use('/chemical-batches', batchesRouter);
+  api.use('/chemical-safety', chemSafetyRouter);
+  api.use('/chemical-receipts', chemReceiptsRouter);
+  api.use('/chemical-issues', chemIssuesRouter);
+  api.use('/chemical-stocktakes', chemStocktakesRouter);
+  api.use('/chemical-adjustments', chemAdjustmentsRouter);
+  api.use('/chemical-inspections', chemInspectionsRouter);
+  api.use('/chemical-incidents', chemIncidentsRouter);
+  api.use('/purchase-requests', prRouter);
+  api.use('/quotes', quotesRouter);
+  api.use('/purchase-orders', poRouter);
   api.use('/items', itemsRouter);
   api.use('/receipts', receiptsRouter);
   api.use('/issues', issuesRouter);

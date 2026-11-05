@@ -13,10 +13,11 @@ import { computeTotals, toExcel, toPdf, sendFile, type ReportResult, type Report
 import { getSettings } from '../lib/settings';
 import { queryNxt, queryStockCard, STOCK_STATUS_LABEL, MOVEMENT_LABEL, BUCKET_TEXT, endOfDay } from '../services/stockQueries';
 import { STATUS_LABEL } from '../lib/doc';
+import { EXTRA_REPORTS } from './reportsExtra';
 
 const r = Router();
 
-interface P {
+export interface P {
   from: Date; to: Date; warehouse_id: number | null; category_id: number | null; department_id: number | null;
   supplier_id: number | null; item_id: number | null; q: string; status: string; kind: string; days: number;
 }
@@ -40,7 +41,7 @@ function parseParams(q: Request['query']): P {
 const vn = (d: Date) => d.toISOString().slice(0, 10).split('-').reverse().join('/');
 const period = (p: P) => `Từ ngày ${vn(p.from)} đến ngày ${vn(p.to)}`;
 
-interface ReportDef {
+export interface ReportDef {
   key: string;
   group: string;
   title: string;
@@ -57,7 +58,7 @@ const nxtCols: ReportColumn[] = [
   { key: 'status_label', header: 'Trạng thái', width: 16 },
 ];
 
-const REPORTS: ReportDef[] = [
+const BASE_REPORTS: ReportDef[] = [
   {
     key: 'receipts', group: 'Kho mỏ', title: 'Báo cáo nhập kho', params: ['from', 'to', 'supplier_id', 'q'],
     run: async (p, req) => {
@@ -313,6 +314,8 @@ const REPORTS: ReportDef[] = [
   },
 ];
 
+const REPORTS: ReportDef[] = [...BASE_REPORTS, ...EXTRA_REPORTS];
+
 r.get('/', requirePerm('reports.view', 'stock.view'), (_req, res) => {
   ok(res, REPORTS.map(({ key, group, title, params }) => ({ key, group, title, params })));
 });
@@ -343,4 +346,4 @@ r.get('/:key/export', requirePerm('reports.export'), async (req, res) => {
 });
 
 export default r;
-export { REPORTS, Prisma };
+export { REPORTS, Prisma, vn, period };

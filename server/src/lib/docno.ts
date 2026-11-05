@@ -7,6 +7,16 @@ export const DOC_PREFIX = {
   RETURN: 'TL',
   ADJUSTMENT: 'DCT',
   STOCKTAKE: 'KK',
+  CHEM_RECEIPT: 'NHC',
+  CHEM_ISSUE: 'XHC',
+  CHEM_STOCKTAKE: 'KKHC',
+  CHEM_ADJUST: 'DCHC',
+  CHEM_INSPECTION: 'KTHC',
+  CHEM_INCIDENT: 'SCHC',
+  PURCHASE_REQUEST: 'DNM',
+  QUOTE: 'BG',
+  PURCHASE_ORDER: 'PO',
+  COMPLAINT: 'KN',
 } as const;
 
 /** Sinh số chứng từ tuần tự theo năm, an toàn đồng thời (UPSERT ... RETURNING trong transaction). */
