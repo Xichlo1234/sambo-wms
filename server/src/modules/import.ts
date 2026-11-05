@@ -53,6 +53,20 @@ const TEMPLATES: Record<string, { title: string; perm: string; cols: ColDef[] }>
       { key: 'note', header: 'Ghi chú' },
     ],
   },
+  chemicals: {
+    title: 'Danh mục hóa chất (thông tin định danh)', perm: 'chemicals.manage',
+    cols: [
+      { key: 'code', header: 'Mã hóa chất', required: true, example: 'HC-0101', note: 'Duy nhất' },
+      { key: 'name', header: 'Tên hóa chất', required: true, example: 'Natri hydroxit' },
+      { key: 'trade_name', header: 'Tên thương mại' }, { key: 'name_en', header: 'Tên tiếng Anh', example: 'Sodium hydroxide' },
+      { key: 'cas_number', header: 'CAS Number', example: '1310-73-2', note: 'Dạng 1234-56-7' }, { key: 'formula', header: 'Công thức', example: 'NaOH' },
+      { key: 'concentration', header: 'Nồng độ', example: '99%' }, { key: 'chemical_group', header: 'Nhóm hóa chất' }, { key: 'manufacturer', header: 'Nhà sản xuất' },
+      { key: 'unit', header: 'Đơn vị tính', required: true, example: 'KG' }, { key: 'packaging', header: 'Quy cách đóng gói', example: 'Bao 25kg' },
+      { key: 'physical_state', header: 'Trạng thái (Rắn/Lỏng/Khí)', example: 'Rắn' }, { key: 'min_stock', header: 'Tồn tối thiểu', example: 100 },
+      { key: 'shelf_life', header: 'HSD mặc định (ngày)', example: 730 }, { key: 'controlled', header: 'Kiểm soát đặc biệt (Có/Không)', example: 'Không' },
+      { key: 'note', header: 'Ghi chú', note: 'Thông tin nguy hiểm/GHS/bảo quản KHÔNG import – phải nhập theo SDS và được HSE xác nhận trên hệ thống' },
+    ],
+  },
   suppliers: {
     title: 'Nhà cung cấp', perm: 'suppliers.manage',
     cols: [
@@ -213,6 +227,28 @@ async function validateRows(type: string, rows: { row: number; data: Record<stri
       if (!errors.length && it && pendingSet.has(it.id)) { status = 'DUPLICATE'; warnings.push('Vật tư đang có phiếu tồn đầu kỳ chờ duyệt'); }
       out.push({ row, data, status, errors, warnings, parsed: { item_id: it?.id, location_id: loc?.id, qty, unit_price: price, note: data.note || null } });
     }
+  } else if (type === 'chemicals') {
+    const [units, existing] = await Promise.all([prisma.unit.findMany(), prisma.chemical.findMany({ select: { code: true, cas_number: true, concentration: true } })]);
+    const exCodes = new Set(existing.map((e) => e.code.toUpperCase()));
+    for (const { row, data } of rows) {
+      const errors: string[] = []; const warnings: string[] = [];
+      const code = data.code?.toUpperCase();
+      if (!code) errors.push('Mã hóa chất: bắt buộc');
+      if (!data.name) errors.push('Tên hóa chất: bắt buộc');
+      if (code && seen.has(code)) errors.push(`Mã ${code} bị lặp trong file`);
+      if (code) seen.add(code);
+      const unit = units.find((u) => normalizeText(u.code) === normalizeText(data.unit) || normalizeText(u.name) === normalizeText(data.unit));
+      if (!data.unit) errors.push('Đơn vị tính: bắt buộc'); else if (!unit) errors.push(`Đơn vị tính "${data.unit}" chưa có`);
+      if (data.cas_number && !/^\d{2,7}-\d{2}-\d$/.test(data.cas_number)) errors.push(`CAS "${data.cas_number}" sai định dạng`);
+      if (data.cas_number && existing.some((e) => e.cas_number === data.cas_number && (e.concentration ?? '') === (data.concentration ?? ''))) warnings.push(`Đã có hóa chất cùng CAS ${data.cas_number} và nồng độ`);
+      const st = normalizeText(data.physical_state);
+      const physical = st.startsWith('ran') || st === 'solid' ? 'SOLID' : st.startsWith('long') || st === 'liquid' ? 'LIQUID' : st.startsWith('khi') || st === 'gas' ? 'GAS' : 'OTHER';
+      const min = num(data.min_stock, 'Tồn tối thiểu', errors) ?? 0;
+      const shelf = num(data.shelf_life, 'HSD mặc định', errors);
+      let status: RowResult['status'] = errors.length ? 'ERROR' : 'NEW';
+      if (!errors.length && exCodes.has(code)) { status = 'DUPLICATE'; warnings.push('Mã đã tồn tại – bỏ qua, không ghi đè'); }
+      out.push({ row, data, status, errors, warnings, parsed: { code, unit_id: unit?.id, physical, min, shelf, controlled: ['co', 'yes', 'x', 'true', '1'].includes(normalizeText(data.controlled)) } });
+    }
   } else if (type === 'suppliers' || type === 'departments') {
     const existing = type === 'suppliers' ? await prisma.supplier.findMany({ select: { code: true, name: true, tax_code: true } }) : await prisma.department.findMany({ select: { code: true, name: true } });
     const exCodes = new Set(existing.map((e) => e.code.toUpperCase()));
@@ -358,6 +394,11 @@ r.post('/:type/commit', upload.single('file'), async (req, res) => {
       }));
       refDoc = adj.code;
       await notifyPermission(tx, ['adjustments.approve'], uid, { type: 'APPROVAL', title: `Tồn đầu kỳ ${adj.code} (${good.length} dòng) chờ duyệt`, link: `/adjustments/${adj.id}` });
+    } else if (type === 'chemicals') {
+      for (const x of good) {
+        const d = x.data; const p = x.parsed as Record<string, unknown>;
+        await tx.chemical.create({ data: { code: String(p.code), name: d.name, trade_name: d.trade_name || null, name_en: d.name_en || null, cas_number: d.cas_number || null, formula: d.formula || null, concentration: d.concentration || null, chemical_group: d.chemical_group || null, manufacturer: d.manufacturer || null, unit_id: Number(p.unit_id), packaging: d.packaging || null, physical_state: p.physical as 'OTHER', min_stock: Number(p.min), default_shelf_life_days: p.shelf ? Math.round(Number(p.shelf)) : null, is_controlled: Boolean(p.controlled), note: d.note || null, search_text: normalizeText(d.name, d.trade_name, d.name_en, d.formula, d.cas_number), created_by: uid, updated_by: uid } });
+      }
     } else if (type === 'suppliers') {
       for (const x of good) {
         const d = x.data;

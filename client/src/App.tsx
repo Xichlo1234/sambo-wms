@@ -17,6 +17,11 @@ import Reports from '@/pages/Reports';
 import ImportPage from '@/pages/Import';
 import { UsersPage, RolesPage, SettingsPage, AuditPage, BackupPage } from '@/pages/System';
 import Guide from '@/pages/Guide';
+import { ChemicalList, ChemicalDetail, BatchList, BatchDetail, ChemStock } from '@/pages/Chemicals';
+import { ChemReceiptList, ChemReceiptForm, ChemReceiptDetail, ChemIssueList, ChemIssueForm, ChemIssueDetail, ChemStocktakeList, ChemStocktakeDetail, ChemAdjustmentList, ChemAdjustmentForm, ChemAdjustmentDetail } from '@/pages/ChemDocs';
+import ChemSafety from '@/pages/ChemSafety';
+import { PrList, PrForm, PrDetail, QuoteList, QuoteRedirect, PoList, PoForm, PoDetail, PoTracking, PurchaseHistory } from '@/pages/Purchasing';
+import { SupplierProfile, SupplierEvaluations } from '@/pages/Suppliers';
 
 function Guard({ perm, children }: { perm?: string[]; children: ReactNode }) {
   const { can } = useAuth();
@@ -68,6 +73,39 @@ export default function App() {
         <Route path="adjustments/new" element={P(['adjustments.create'], <AdjustmentForm />)} />
         <Route path="adjustments/:id" element={P(['adjustments.view'], <AdjustmentDetail />)} />
         <Route path="suppliers" element={P(['suppliers.view'], <SuppliersPage />)} />
+        <Route path="suppliers/:id" element={P(['suppliers.view'], <SupplierProfile />)} />
+        <Route path="supplier-evaluations" element={P(['suppliers.view'], <SupplierEvaluations />)} />
+        <Route path="chemicals" element={P(['chemicals.view'], <ChemicalList />)} />
+        <Route path="chemicals/:id" element={P(['chemicals.view', 'chemicals.request'], <ChemicalDetail />)} />
+        <Route path="chem-batches" element={P(['chemicals.view'], <BatchList />)} />
+        <Route path="chem-batches/:id" element={P(['chemicals.view'], <BatchDetail />)} />
+        <Route path="chem-stock" element={P(['chemicals.view'], <ChemStock />)} />
+        <Route path="chem-receipts" element={P(['chemicals.view'], <ChemReceiptList />)} />
+        <Route path="chem-receipts/new" element={P(['chemicals.receipt_create'], <ChemReceiptForm />)} />
+        <Route path="chem-receipts/:id/edit" element={P(['chemicals.receipt_create'], <ChemReceiptForm />)} />
+        <Route path="chem-receipts/:id" element={P(['chemicals.view'], <ChemReceiptDetail />)} />
+        <Route path="chem-issues" element={P(['chemicals.view', 'chemicals.request'], <ChemIssueList />)} />
+        <Route path="chem-issues/new" element={P(['chemicals.request'], <ChemIssueForm />)} />
+        <Route path="chem-issues/:id/edit" element={P(['chemicals.request'], <ChemIssueForm />)} />
+        <Route path="chem-issues/:id" element={P(['chemicals.view', 'chemicals.request'], <ChemIssueDetail />)} />
+        <Route path="chem-stocktakes" element={P(['chemicals.view'], <ChemStocktakeList />)} />
+        <Route path="chem-stocktakes/:id" element={P(['chemicals.view'], <ChemStocktakeDetail />)} />
+        <Route path="chem-adjustments" element={P(['chemicals.view'], <ChemAdjustmentList />)} />
+        <Route path="chem-adjustments/new" element={P(['chemicals.adjust'], <ChemAdjustmentForm />)} />
+        <Route path="chem-adjustments/:id" element={P(['chemicals.view'], <ChemAdjustmentDetail />)} />
+        <Route path="chem-safety" element={P(['chemicals.view'], <ChemSafety />)} />
+        <Route path="purchase-requests" element={P(['purchase.view'], <PrList />)} />
+        <Route path="purchase-requests/new" element={P(['purchase.request'], <PrForm />)} />
+        <Route path="purchase-requests/:id/edit" element={P(['purchase.request'], <PrForm />)} />
+        <Route path="purchase-requests/:id" element={P(['purchase.view'], <PrDetail />)} />
+        <Route path="quotes" element={P(['purchase.view'], <QuoteList />)} />
+        <Route path="quotes/:id" element={P(['purchase.view'], <QuoteRedirect />)} />
+        <Route path="purchase-orders" element={P(['purchase.view'], <PoList />)} />
+        <Route path="purchase-orders/new" element={P(['purchase.order'], <PoForm />)} />
+        <Route path="purchase-orders/:id/edit" element={P(['purchase.order'], <PoForm />)} />
+        <Route path="purchase-orders/:id" element={P(['purchase.view', 'receipts.create', 'chemicals.receipt_create'], <PoDetail />)} />
+        <Route path="po-tracking" element={P(['purchase.view'], <PoTracking />)} />
+        <Route path="purchase-history" element={P(['purchase.view'], <PurchaseHistory />)} />
         <Route path="departments" element={P(['departments.view'], <DepartmentsPage />)} />
         <Route path="reports" element={P(['reports.view'], <Reports />)} />
         <Route path="import" element={<ImportPage />} />

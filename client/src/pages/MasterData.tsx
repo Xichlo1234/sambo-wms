@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /** Trang danh mục dùng chung: Nhà cung cấp, Bộ phận, Kho, Vị trí, Nhóm vật tư, Đơn vị tính */
 import { useEffect, useState, type ReactNode } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Pencil, Lock, Unlock, Upload } from 'lucide-react';
 import { api } from '@/lib/api';
@@ -90,7 +90,7 @@ export function MasterPage({ title, subtitle, endpoint, managePerm, fields, colu
 export const SuppliersPage = () => {
   const { can } = useAuth();
   return (
-    <MasterPage title="Nhà cung cấp" subtitle="Hồ sơ nhà cung cấp dùng chung cho kho mỏ, kho hóa chất và mua hàng" endpoint="/suppliers" managePerm="suppliers.manage" importType="suppliers" attachEntity="supplier"
+    <MasterPage title="Nhà cung cấp" subtitle="Hồ sơ dùng chung cho kho mỏ, kho hóa chất và mua hàng – bấm mã/tên để xem hồ sơ đầy đủ, lịch sử giao dịch, đánh giá" endpoint="/suppliers" managePerm="suppliers.manage" importType="suppliers" attachEntity="supplier"
       extraFilter={(set, v) => <select className="input w-44" value={(v.cooperation_status as string) ?? ''} onChange={(e) => set('cooperation_status', e.target.value)}><option value="">Mọi tình trạng hợp tác</option>{Object.entries(COOP_STATUS).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>}
       fields={[
         { key: 'code', label: 'Mã NCC', required: true }, { key: 'name', label: 'Tên doanh nghiệp', required: true, span: 2 },
@@ -102,7 +102,7 @@ export const SuppliersPage = () => {
         { key: 'note', label: 'Ghi chú', type: 'textarea', span: 3 },
       ]}
       columns={[
-        { key: 'code', header: 'Mã', render: (r) => <b>{r.code}</b> }, { key: 'name', header: 'Tên doanh nghiệp' }, { key: 'country', header: 'Quốc gia' },
+        { key: 'code', header: 'Mã', render: (r) => <Link className="font-semibold text-navy-700 hover:underline" to={`/suppliers/${r.id}`}>{r.code}</Link> }, { key: 'name', header: 'Tên doanh nghiệp', render: (r) => <Link className="hover:underline" to={`/suppliers/${r.id}`}>{r.name}</Link> }, { key: 'country', header: 'Quốc gia' },
         { key: 'contact', header: 'Liên hệ', render: (r) => <div className="text-xs">{r.contact_person}<br />{r.phone} {r.email}</div> },
         { key: 'supply_groups', header: 'Nhóm hàng' }, { key: 'coop', header: 'Hợp tác', render: (r) => COOP_STATUS[r.cooperation_status] },
       ]} />

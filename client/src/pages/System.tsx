@@ -170,6 +170,23 @@ export function SettingsPage() {
               <label className="col-span-2 flex items-center gap-2 text-sm"><input type="checkbox" checked={!!f['issue.require_quota_note']} onChange={(e) => setF({ ...f, 'issue.require_quota_note': e.target.checked })} />Bắt buộc ghi lý do khi yêu cầu cấp vượt định mức</label>
             </div>
           </Card>}
+          {can('settings.manage') && <Card title="Chính sách kho hóa chất & mua hàng (công ty xác nhận)" actions={<button className="btn-primary" onClick={() => save.mutate({
+            'chemical.require_batch': !!f['chemical.require_batch'], 'chemical.require_expiry': !!f['chemical.require_expiry'], 'chemical.require_mfg_date': !!f['chemical.require_mfg_date'],
+            'chemical.require_sds': !!f['chemical.require_sds'], 'chemical.require_safety_verified': !!f['chemical.require_safety_verified'], 'chemical.fefo': !!f['chemical.fefo'],
+            'chemical.expiry_alert_days': String(f['chemical.expiry_alert_days'] ?? '30,60,90').split(',').map((x: string) => Number(x.trim())).filter((x: number) => x > 0),
+            'chemical.long_storage_days': f['chemical.long_storage_days'], 'purchase.require_quote_count': f['purchase.require_quote_count'],
+          })}>Lưu</button>}>
+            <div className="space-y-2 text-sm">
+              {[['chemical.require_batch', 'Bắt buộc mã lô nhà sản xuất khi nhập'], ['chemical.require_expiry', 'Bắt buộc hạn sử dụng khi nhập'], ['chemical.require_mfg_date', 'Bắt buộc ngày sản xuất khi nhập'], ['chemical.require_sds', 'Bắt buộc SDS/MSDS còn hiệu lực trước khi nhập & xuất'], ['chemical.require_safety_verified', 'Bắt buộc thông tin an toàn đã được HSE xác nhận trước khi nhập & xuất'], ['chemical.fefo', 'Xuất theo FEFO (hạn gần nhất xuất trước) – bắt buộc']].map(([k, l]) => (
+                <label key={k} className="flex items-center gap-2"><input type="checkbox" checked={!!f[k]} onChange={(e) => setF({ ...f, [k]: e.target.checked })} />{l}</label>
+              ))}
+              <div className="grid grid-cols-3 gap-3 pt-2">
+                <Field label="Mốc cảnh báo hạn dùng (ngày)" hint="VD: 30,60,90"><input className="input" value={Array.isArray(f['chemical.expiry_alert_days']) ? f['chemical.expiry_alert_days'].join(',') : f['chemical.expiry_alert_days'] ?? ''} onChange={(e) => setF({ ...f, 'chemical.expiry_alert_days': e.target.value })} /></Field>
+                <Field label="Tồn kho lâu ngày (ngày)"><input type="number" className="input" value={f['chemical.long_storage_days'] ?? 365} onChange={(e) => setF({ ...f, 'chemical.long_storage_days': e.target.value })} /></Field>
+                <Field label="Số báo giá tối thiểu trước khi lập PO" hint="0 = không bắt buộc"><input type="number" className="input" value={f['purchase.require_quote_count'] ?? 0} onChange={(e) => setF({ ...f, 'purchase.require_quote_count': e.target.value })} /></Field>
+              </div>
+            </div>
+          </Card>}
           <Card title="Kiểm tra toàn vẹn dữ liệu kho">
             <p className="mb-3 text-sm text-slate-600">Đối chiếu số dư tồn kho hiện tại với toàn bộ sổ cái giao dịch.</p>
             <button className="btn-outline" onClick={() => api.get('/stock/reconcile').then(setRc).catch(toast.error)}><Scale size={15} />Chạy đối chiếu</button>

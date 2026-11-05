@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Trash2, Send, CheckCircle2, XCircle, Ban, Pencil, ArrowLeft, Microscope } from 'lucide-react';
 import { api, newRequestId } from '@/lib/api';
@@ -10,7 +10,7 @@ import { Alert, Badge, Card, Field, Loading, Modal, PageHeader, ReasonDialog, Sp
 import { AttachmentsPanel, HistoryTimeline, ItemPicker, LookupSelect, PrintButton, type PickedItem } from '@/components/shared';
 import { DocList } from '@/components/DocList';
 
-interface Line { key: string; item: PickedItem | null; location_id: number | null; qty_doc: string; qty_received: string; qty_pending: string; qty_rejected: string; unit_price: string; condition_note: string; note: string }
+interface Line { key: string; po_item_id?: number | null; item: PickedItem | null; location_id: number | null; qty_doc: string; qty_received: string; qty_pending: string; qty_rejected: string; unit_price: string; condition_note: string; note: string }
 const emptyLine = (): Line => ({ key: newRequestId(), item: null, location_id: null, qty_doc: '', qty_received: '', qty_pending: '0', qty_rejected: '0', unit_price: '', condition_note: '', note: '' });
 
 export function ReceiptList() {
@@ -44,24 +44,37 @@ export function ReceiptForm() {
   const [reqId] = useState(newRequestId);
   const { data: whs } = useLookup('/warehouses');
   const generalWhs = whs?.filter((w) => w.type === 'GENERAL');
-  const [h, setH] = useState({ warehouse_id: null as number | null, doc_date: todayISO(), received_date: todayISO(), supplier_id: null as number | null, po_number: '', supplier_doc_no: '', deliverer_name: '', receiver_name: '', department_id: null as number | null, currency: '', exchange_rate: '', note: '', docs_checked: false, qty_checked: false, spec_checked: false });
+  const [sp] = useSearchParams();
+  const [h, setH] = useState({ warehouse_id: null as number | null, purchase_order_id: null as number | null, doc_date: todayISO(), received_date: todayISO(), supplier_id: null as number | null, po_number: '', supplier_doc_no: '', deliverer_name: '', receiver_name: '', department_id: null as number | null, currency: '', exchange_rate: '', note: '', docs_checked: false, qty_checked: false, spec_checked: false });
   const [lines, setLines] = useState<Line[]>([emptyLine()]);
   const existing = useQuery({ queryKey: ['/receipts', id], enabled: !!id, queryFn: () => api.get<Record<string, any>>(`/receipts/${id}`) }); // eslint-disable-line @typescript-eslint/no-explicit-any
   useEffect(() => {
     if (!h.warehouse_id && generalWhs?.length) setH((x) => ({ ...x, warehouse_id: generalWhs[0].id }));
   }, [generalWhs]); // eslint-disable-line react-hooks/exhaustive-deps
+  const pos = useQuery({ queryKey: ['po-receivable-item'], queryFn: () => api.page<any>('/purchase-orders', { receivable: 1, kind: 'item', pageSize: 100 }) }); // eslint-disable-line @typescript-eslint/no-explicit-any
+  const loadPo = async (poId: number | null) => {
+    setH((x) => ({ ...x, purchase_order_id: poId }));
+    if (!poId) { setLines((ls) => ls.map((l) => ({ ...l, po_item_id: null }))); return; }
+    const po = await api.get<any>(`/purchase-orders/${poId}`); // eslint-disable-line @typescript-eslint/no-explicit-any
+    setH((x) => ({ ...x, purchase_order_id: poId, supplier_id: po.supplier_id, po_number: po.code, currency: po.currency ?? x.currency }));
+    const rows = po.lines.filter((l: any) => l.item && l.remaining > 0); // eslint-disable-line @typescript-eslint/no-explicit-any
+    setLines(rows.map((l: any) => ({ ...emptyLine(), po_item_id: l.id, item: { ...l.item, default_location_id: null }, qty_doc: String(l.remaining), qty_received: String(l.remaining), unit_price: l.unit_price != null ? String(l.unit_price) : '' }))); // eslint-disable-line @typescript-eslint/no-explicit-any
+    toast.info(`Đã nạp ${rows.length} dòng còn phải giao của đơn ${po.code}. Kiểm tra số lượng thực nhận và vị trí lưu kho.`);
+  };
+  useEffect(() => { const p = sp.get('po'); if (p && !id) loadPo(Number(p)); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     const d = existing.data;
     if (!d) return;
-    setH({ warehouse_id: d.warehouse_id, doc_date: toISODate(d.doc_date), received_date: toISODate(d.received_date), supplier_id: d.supplier_id, po_number: d.po_number ?? '', supplier_doc_no: d.supplier_doc_no ?? '', deliverer_name: d.deliverer_name ?? '', receiver_name: d.receiver_name ?? '', department_id: d.department_id, currency: d.currency ?? '', exchange_rate: d.exchange_rate ?? '', note: d.note ?? '', docs_checked: d.docs_checked, qty_checked: d.qty_checked, spec_checked: d.spec_checked });
-    setLines(d.lines.map((l: any) => ({ key: String(l.id), item: { ...l.item }, location_id: l.location_id, qty_doc: String(l.qty_doc), qty_received: String(l.qty_received), qty_pending: String(l.qty_pending), qty_rejected: String(l.qty_rejected), unit_price: l.unit_price != null ? String(l.unit_price) : '', condition_note: l.condition_note ?? '', note: l.note ?? '' }))); // eslint-disable-line @typescript-eslint/no-explicit-any
+    setH({ warehouse_id: d.warehouse_id, purchase_order_id: d.purchase_order_id ?? null, doc_date: toISODate(d.doc_date), received_date: toISODate(d.received_date), supplier_id: d.supplier_id, po_number: d.po_number ?? '', supplier_doc_no: d.supplier_doc_no ?? '', deliverer_name: d.deliverer_name ?? '', receiver_name: d.receiver_name ?? '', department_id: d.department_id, currency: d.currency ?? '', exchange_rate: d.exchange_rate ?? '', note: d.note ?? '', docs_checked: d.docs_checked, qty_checked: d.qty_checked, spec_checked: d.spec_checked });
+    setLines(d.lines.map((l: any) => ({ key: String(l.id), po_item_id: l.po_item_id ?? null, item: { ...l.item }, location_id: l.location_id, qty_doc: String(l.qty_doc), qty_received: String(l.qty_received), qty_pending: String(l.qty_pending), qty_rejected: String(l.qty_rejected), unit_price: l.unit_price != null ? String(l.unit_price) : '', condition_note: l.condition_note ?? '', note: l.note ?? '' }))); // eslint-disable-line @typescript-eslint/no-explicit-any
   }, [existing.data]);
   const upd = (k: string, patch: Partial<Line>) => setLines((ls) => ls.map((l) => (l.key === k ? { ...l, ...patch } : l)));
   const save = useMutation({
     mutationFn: async (andSubmit: boolean) => {
       const body = {
         ...h, client_request_id: id ? undefined : reqId, received_date: h.received_date || null, exchange_rate: h.exchange_rate || null, currency: h.currency || null,
-        lines: lines.filter((l) => l.item).map((l) => ({ item_id: l.item!.id, location_id: l.location_id, qty_doc: l.qty_doc || 0, qty_received: l.qty_received || 0, qty_pending: l.qty_pending || 0, qty_rejected: l.qty_rejected || 0, unit_price: l.unit_price === '' ? null : l.unit_price, condition_note: l.condition_note, note: l.note })),
+        purchase_order_id: h.purchase_order_id,
+        lines: lines.filter((l) => l.item).map((l) => ({ po_item_id: l.po_item_id ?? null, item_id: l.item!.id, location_id: l.location_id, qty_doc: l.qty_doc || 0, qty_received: l.qty_received || 0, qty_pending: l.qty_pending || 0, qty_rejected: l.qty_rejected || 0, unit_price: l.unit_price === '' ? null : l.unit_price, condition_note: l.condition_note, note: l.note })),
       };
       const r = id ? await api.put<{ id: number }>(`/receipts/${id}`, body) : await api.post<{ id: number }>('/receipts', body);
       const docId = id ? Number(id) : r.id;
@@ -84,7 +97,8 @@ export function ReceiptForm() {
             <Field label="Ngày chứng từ" required><input type="date" className="input" value={h.doc_date} onChange={(e) => setH({ ...h, doc_date: e.target.value })} /></Field>
             <Field label="Ngày nhận hàng thực tế"><input type="date" className="input" value={h.received_date} onChange={(e) => setH({ ...h, received_date: e.target.value })} /></Field>
             <Field label="Nhà cung cấp"><LookupSelect path="/suppliers" value={h.supplier_id} onChange={(v) => setH({ ...h, supplier_id: v })} /></Field>
-            <Field label="Số đơn đặt hàng (PO)"><input className="input" value={h.po_number} onChange={(e) => setH({ ...h, po_number: e.target.value })} /></Field>
+            <Field label="Đơn đặt hàng (PO) trong hệ thống" hint="Chọn để nạp các dòng còn phải giao"><select className="input" value={h.purchase_order_id ?? ''} onChange={(e) => loadPo(e.target.value ? Number(e.target.value) : null)}><option value="">-- Không theo PO --</option>{pos.data?.data.map((p: any) => <option key={p.id} value={p.id}>{p.code} – {p.supplier.name}</option>)}</select></Field> {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
+            {!h.purchase_order_id && <Field label="Số PO ngoài hệ thống (nếu có)"><input className="input" value={h.po_number} onChange={(e) => setH({ ...h, po_number: e.target.value })} /></Field>}
             <Field label="Số hóa đơn / phiếu giao hàng"><input className="input" value={h.supplier_doc_no} onChange={(e) => setH({ ...h, supplier_doc_no: e.target.value })} /></Field>
             <Field label="Người giao hàng"><input className="input" value={h.deliverer_name} onChange={(e) => setH({ ...h, deliverer_name: e.target.value })} /></Field>
             <Field label="Người nhận hàng"><input className="input" value={h.receiver_name} onChange={(e) => setH({ ...h, receiver_name: e.target.value })} placeholder="Mặc định: người lập" /></Field>
@@ -108,7 +122,7 @@ export function ReceiptForm() {
                   return (
                     <tr key={l.key}>
                       <td>{i + 1}</td>
-                      <td><ItemPicker value={l.item} onPick={(it) => upd(l.key, { item: it, location_id: l.location_id ?? it?.default_location_id ?? null })} />{l.item && <div className="mt-0.5 text-xs text-slate-500">ĐVT: {l.item.unit.code}</div>}</td>
+                      <td><ItemPicker value={l.item} disabled={!!l.po_item_id} onPick={(it) => upd(l.key, { item: it, location_id: l.location_id ?? it?.default_location_id ?? null })} />{l.item && <div className="mt-0.5 text-xs text-slate-500">ĐVT: {l.item.unit.code}{l.po_item_id ? ' · theo dòng PO' : ''}</div>}</td>
                       <td><LookupSelect path="/locations" params={{ warehouse_id: h.warehouse_id }} value={l.location_id} onChange={(v) => upd(l.key, { location_id: v })} labelFn={(r) => r.code} /></td>
                       <td><input type="number" step="any" min={0} className="input text-right" value={l.qty_doc} onChange={(e) => upd(l.key, { qty_doc: e.target.value, qty_received: l.qty_received === '' ? e.target.value : l.qty_received })} /></td>
                       <td><input type="number" step="any" min={0} className={`input text-right ${diff ? 'border-amber-400 bg-amber-50' : ''}`} value={l.qty_received} onChange={(e) => upd(l.key, { qty_received: e.target.value })} />{diff && <div className="text-[11px] text-amber-700">{rec < docq ? `Thiếu ${fmtNum(docq - rec)}` : `Thừa ${fmtNum(rec - docq)}`}</div>}</td>
@@ -207,7 +221,7 @@ export function ReceiptDetail() {
       <div className="grid gap-4 lg:grid-cols-3">
         <Card title="Thông tin phiếu" className="lg:col-span-2">
           <dl className="grid grid-cols-1 gap-2 text-sm md:grid-cols-3">
-            {[['Kho', d.warehouse.name], ['Ngày chứng từ', fmtDate(d.doc_date)], ['Ngày nhận thực tế', fmtDate(d.received_date)], ['Ngày ghi sổ', fmtDateTime(d.posted_at)], ['Nhà cung cấp', d.supplier?.name], ['Số PO', d.po_number], ['Số HĐ / phiếu giao', d.supplier_doc_no], ['Người giao', d.deliverer_name], ['Người nhận', d.receiver_name || d.creator.full_name], ['Bộ phận', d.department?.name], ['Tiền tệ', d.currency], ['Ghi chú', d.note]].map(([k, v]) => <div key={k as string}><dt className="text-xs text-slate-500">{k}</dt><dd className="font-medium">{v || '–'}</dd></div>)}
+            {[['Kho', d.warehouse.name], ['Ngày chứng từ', fmtDate(d.doc_date)], ['Ngày nhận thực tế', fmtDate(d.received_date)], ['Ngày ghi sổ', fmtDateTime(d.posted_at)], ['Nhà cung cấp', d.supplier?.name], ['Đơn đặt hàng', d.purchase_order ? <Link key="po" className="text-navy-700 underline" to={`/purchase-orders/${d.purchase_order.id}`}>{d.purchase_order.code}</Link> : d.po_number], ['Số HĐ / phiếu giao', d.supplier_doc_no], ['Người giao', d.deliverer_name], ['Người nhận', d.receiver_name || d.creator.full_name], ['Bộ phận', d.department?.name], ['Tiền tệ', d.currency], ['Ghi chú', d.note]].map(([k, v]) => <div key={k as string}><dt className="text-xs text-slate-500">{k}</dt><dd className="font-medium">{v || '–'}</dd></div>)}
           </dl>
           <div className="mt-3 flex flex-wrap gap-4 text-xs">{[['docs_checked', 'Chứng từ'], ['qty_checked', 'Số lượng'], ['spec_checked', 'Quy cách/tình trạng']].map(([k, l]) => <span key={k} className={d[k] ? 'text-emerald-700' : 'text-slate-400'}>{d[k] ? '✔' : '○'} Đã kiểm tra {l}</span>)}</div>
         </Card>

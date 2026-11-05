@@ -12,6 +12,7 @@ import { Alert, Card, PageHeader, Spinner, Tabs, useToast } from '@/components/u
 const TYPES = [
   { key: 'items', label: 'Danh mục vật tư / thiết bị', perm: ['items.import'] },
   { key: 'opening_stock', label: 'Tồn kho ban đầu', perm: ['adjustments.create'] },
+  { key: 'chemicals', label: 'Danh mục hóa chất', perm: ['chemicals.manage'] },
   { key: 'suppliers', label: 'Nhà cung cấp', perm: ['suppliers.manage', 'import.run'] },
   { key: 'departments', label: 'Bộ phận sử dụng', perm: ['departments.manage', 'import.run'] },
 ];
@@ -74,6 +75,7 @@ export default function ImportPage() {
             <input type="date" className="input mb-2" value={opts.doc_date} onChange={(e) => setOpts({ ...opts, doc_date: e.target.value })} />
             <Alert type="info">Tồn đầu kỳ tạo thành <b>phiếu điều chỉnh chờ duyệt</b>, chỉ cập nhật tồn khi Quản lý kho (người khác) phê duyệt. Mặt hàng đã có giao dịch sẽ bị bỏ qua.</Alert>
           </>}
+          {type === 'chemicals' && <div className="mt-2"><Alert type="warning">Chỉ import thông tin định danh. Thông tin nguy hiểm, GHS, bảo quản, bảo hộ phải nhập theo SDS và được HSE xác nhận trên hệ thống.</Alert></div>}
           {type === 'items' && <label className="mb-2 mt-2 flex items-start gap-2 text-sm"><input type="checkbox" className="mt-0.5" checked={opts.auto_create_refs} onChange={(e) => setOpts({ ...opts, auto_create_refs: e.target.checked })} />Tự tạo Nhóm vật tư / Đơn vị tính chưa có trong hệ thống (theo mã trong file)</label>}
           <input type="file" accept=".xlsx" className="mt-2 text-sm" onChange={(e) => { setFile(e.target.files?.[0] ?? null); setPreview(null); }} />
           <button className="btn-primary mt-3 w-full" disabled={!file || !!busy || (type === 'opening_stock' && !opts.warehouse_id)} onClick={() => run('preview')}>{busy === 'preview' ? <Spinner className="h-4 w-4 text-white" /> : <FileSearch size={15} />}Kiểm tra & xem trước</button>

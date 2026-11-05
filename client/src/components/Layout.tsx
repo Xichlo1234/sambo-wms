@@ -5,7 +5,8 @@ import { clsx } from 'clsx';
 import {
   LayoutDashboard, Package, Wrench, ArrowDownToLine, ArrowUpFromLine, Boxes, FileSpreadsheet, ClipboardCheck, ArrowLeftRight, Undo2,
   SlidersHorizontal, Truck, Building2, BarChart3, Upload, Users, ShieldCheck, Settings, History, DatabaseBackup, BookOpen, Bell, Search,
-  LogOut, KeyRound, Menu, ChevronDown,
+  LogOut, KeyRound, Menu, ChevronDown, FlaskConical, TestTubes, CalendarClock, ShieldAlert, FileText, ClipboardList, FileQuestion, ShoppingCart,
+  PackageCheck, History as HistoryIcon, Star, Trash2,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { api } from '@/lib/api';
@@ -18,11 +19,11 @@ interface NavGroup { title?: string; items: NavItem[] }
 const NAV: NavGroup[] = [
   { items: [{ to: '/', label: 'Tổng quan Dashboard', icon: <LayoutDashboard size={17} />, perm: ['dashboard.view'] }] },
   {
-    title: 'Kho mỏ (5.1)', items: [
+    title: 'Kho mỏ', items: [
       { to: '/items', label: 'Danh mục vật tư', icon: <Package size={17} />, perm: ['items.view'] },
       { to: '/equipment', label: 'Danh mục thiết bị', icon: <Wrench size={17} />, perm: ['items.view'] },
       { to: '/receipts', label: 'Nhập kho', icon: <ArrowDownToLine size={17} />, perm: ['receipts.view'] },
-      { to: '/issues', label: 'Xuất kho / Yêu cầu cấp', icon: <ArrowUpFromLine size={17} />, perm: ['issues.view', 'issues.view_all'] },
+      { to: '/issues', label: 'Xuất kho', icon: <ArrowUpFromLine size={17} />, perm: ['issues.view', 'issues.view_all'] },
       { to: '/stock', label: 'Tồn kho', icon: <Boxes size={17} />, perm: ['stock.view'] },
       { to: '/stock-card', label: 'Thẻ kho', icon: <FileSpreadsheet size={17} />, perm: ['stock.view'] },
       { to: '/stocktakes', label: 'Kiểm kê', icon: <ClipboardCheck size={17} />, perm: ['stocktakes.view'] },
@@ -32,15 +33,38 @@ const NAV: NavGroup[] = [
     ],
   },
   {
-    title: 'Đối tác & bộ phận', items: [
-      { to: '/suppliers', label: 'Nhà cung cấp', icon: <Truck size={17} />, perm: ['suppliers.view'] },
-      { to: '/departments', label: 'Bộ phận sử dụng', icon: <Building2 size={17} />, perm: ['departments.view'] },
+    title: 'Kho hóa chất', items: [
+      { to: '/chemicals', label: 'Danh mục hóa chất', icon: <FlaskConical size={17} />, perm: ['chemicals.view'] },
+      { to: '/chem-receipts', label: 'Nhập hóa chất', icon: <ArrowDownToLine size={17} />, perm: ['chemicals.view'] },
+      { to: '/chem-issues', label: 'Xuất hóa chất', icon: <ArrowUpFromLine size={17} />, perm: ['chemicals.view', 'chemicals.request'] },
+      { to: '/chem-batches', label: 'Quản lý lô & hạn sử dụng', icon: <CalendarClock size={17} />, perm: ['chemicals.view'] },
+      { to: '/chem-stock', label: 'Tồn kho hóa chất', icon: <TestTubes size={17} />, perm: ['chemicals.view'] },
+      { to: '/chem-safety?tab=sds', label: 'SDS/MSDS', icon: <FileText size={17} />, perm: ['chemicals.view'] },
+      { to: '/chem-safety?tab=alerts', label: 'Cảnh báo an toàn', icon: <ShieldAlert size={17} />, perm: ['chemicals.view'] },
+      { to: '/chem-stocktakes', label: 'Kiểm kê hóa chất', icon: <ClipboardCheck size={17} />, perm: ['chemicals.view'] },
+      { to: '/chem-adjustments', label: 'Điều chỉnh / tiêu hủy', icon: <Trash2 size={17} />, perm: ['chemicals.view'] },
     ],
   },
   {
+    title: 'Mua hàng', items: [
+      { to: '/purchase-requests', label: 'Đề nghị mua hàng', icon: <ClipboardList size={17} />, perm: ['purchase.view'] },
+      { to: '/quotes', label: 'Yêu cầu báo giá', icon: <FileQuestion size={17} />, perm: ['purchase.view'] },
+      { to: '/purchase-orders', label: 'Đơn đặt hàng', icon: <ShoppingCart size={17} />, perm: ['purchase.view'] },
+      { to: '/po-tracking', label: 'Theo dõi giao hàng', icon: <PackageCheck size={17} />, perm: ['purchase.view'] },
+      { to: '/purchase-history', label: 'Lịch sử mua hàng', icon: <HistoryIcon size={17} />, perm: ['purchase.view'] },
+    ],
+  },
+  {
+    title: 'Nhà cung cấp', items: [
+      { to: '/suppliers', label: 'Danh sách / hồ sơ NCC', icon: <Truck size={17} />, perm: ['suppliers.view'] },
+      { to: '/supplier-evaluations', label: 'Đánh giá & so sánh NCC', icon: <Star size={17} />, perm: ['suppliers.view'] },
+    ],
+  },
+  { items: [{ to: '/departments', label: 'Bộ phận sử dụng', icon: <Building2 size={17} />, perm: ['departments.view'] }] },
+  {
     title: 'Báo cáo & dữ liệu', items: [
       { to: '/reports', label: 'Báo cáo và thống kê', icon: <BarChart3 size={17} />, perm: ['reports.view'] },
-      { to: '/import', label: 'Nhập dữ liệu từ Excel', icon: <Upload size={17} />, perm: ['items.import', 'adjustments.create', 'suppliers.manage', 'departments.manage', 'import.run'] },
+      { to: '/import', label: 'Nhập dữ liệu từ Excel', icon: <Upload size={17} />, perm: ['items.import', 'adjustments.create', 'suppliers.manage', 'departments.manage', 'import.run', 'chemicals.manage'] },
     ],
   },
   {
@@ -154,14 +178,14 @@ export default function Layout() {
             <div key={gi} className="mb-3">
               {g.title && <div className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-wider text-navy-400">{g.title}</div>}
               {g.items.map((i) => (
-                <NavLink key={i.to} to={i.to} end={i.to === '/'} className={({ isActive }) => clsx('flex items-center gap-2.5 rounded-md px-3 py-1.5 text-[13px] transition', isActive ? 'bg-gold-500 font-semibold text-navy-950' : 'text-navy-100 hover:bg-navy-800')}>
+                <NavLink key={i.to} to={i.to} end={i.to === '/'} className={({ isActive }) => clsx('flex items-center gap-2.5 rounded-md px-3 py-1.5 text-[13px] transition', (i.to.includes('?') ? loc.pathname + loc.search === i.to : isActive) ? 'bg-gold-500 font-semibold text-navy-950' : 'text-navy-100 hover:bg-navy-800')}>
                   {i.icon}{i.label}
                 </NavLink>
               ))}
             </div>
           ))}
         </nav>
-        <div className="border-t border-navy-800 px-4 py-2 text-[10px] text-navy-400">Phiên bản 1.0 – Giai đoạn 1–3</div>
+        <div className="border-t border-navy-800 px-4 py-2 text-[10px] text-navy-400">Phiên bản 1.1 – Kho mỏ · Hóa chất · Mua hàng</div>
       </aside>
       {mobileOpen && <div className="fixed inset-0 z-30 bg-black/40 lg:hidden" onClick={() => setMobileOpen(false)} />}
 

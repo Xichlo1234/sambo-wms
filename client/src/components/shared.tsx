@@ -158,3 +158,61 @@ export function ExportButtons({ reportKey, params }: { reportKey: string; params
     </>
   );
 }
+
+export interface PickedChemical { id: number; code: string; name: string; cas_number?: string | null; concentration?: string | null; is_controlled: boolean; unit: { code: string }; available?: number; on_hand?: number; sds_state?: string; ghs_pictograms?: string[]; default_shelf_life_days?: number | null }
+
+/** Ô tìm & chọn hóa chất (mã, tên không dấu, CAS) – kèm tồn được phép xuất & tình trạng SDS */
+export function ChemicalPicker({ value, onPick, warehouseId, disabled }: { value?: PickedChemical | null; onPick: (c: PickedChemical | null) => void; warehouseId?: number | null; disabled?: boolean }) {
+  const [q, setQ] = useState('');
+  const [open, setOpen] = useState(false);
+  const dq = useDebounce(q, 250);
+  const ref = useRef<HTMLDivElement>(null);
+  const { data, isFetching } = useQuery({ queryKey: ['chem-lookup', dq, warehouseId], enabled: open, queryFn: () => api.get<PickedChemical[]>('/chemicals/lookup', { q: dq, warehouse_id: warehouseId }) });
+  useEffect(() => {
+    const h = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, []);
+  if (value && !open) {
+    return (
+      <div className="flex items-center gap-1">
+        <div className="input flex-1 truncate bg-slate-50" title={value.name}><b>{value.code}</b> – {value.name}{value.is_controlled && <span className="ml-1 rounded bg-red-100 px-1 text-[10px] text-red-700">KSĐB</span>}</div>
+        {!disabled && <button type="button" className="btn-ghost btn-sm" onClick={() => { onPick(null); setOpen(true); }}>Đổi</button>}
+      </div>
+    );
+  }
+  return (
+    <div ref={ref} className="relative">
+      <input className="input" placeholder="Gõ mã, tên hóa chất hoặc số CAS..." value={q} disabled={disabled} onChange={(e) => { setQ(e.target.value); setOpen(true); }} onFocus={() => setOpen(true)} />
+      {open && (
+        <div className="absolute left-0 z-30 mt-1 max-h-72 w-[36rem] max-w-[90vw] overflow-y-auto rounded-md border bg-white shadow-lg">
+          {isFetching && <div className="p-2 text-xs text-slate-500">Đang tìm...</div>}
+          {!isFetching && data?.length === 0 && <div className="p-2 text-xs text-slate-500">Không tìm thấy hóa chất đang sử dụng</div>}
+          {data?.map((c) => (
+            <button type="button" key={c.id} className="flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-sm hover:bg-navy-50" onClick={() => { onPick(c); setOpen(false); setQ(''); }}>
+              <span><b>{c.code}</b> – {c.name}{c.cas_number && <span className="text-xs text-slate-500"> (CAS {c.cas_number})</span>}{c.is_controlled && <span className="ml-1 rounded bg-red-100 px-1 text-[10px] text-red-700">Kiểm soát ĐB</span>}</span>
+              <span className="shrink-0 text-xs text-slate-500">{c.available !== undefined && <>Được xuất: <b className={c.available > 0 ? 'text-emerald-700' : 'text-red-600'}>{fmtNum(c.available)}</b> </>}{c.unit.code}{c.sds_state && c.sds_state !== 'OK' && <span className="ml-1 text-amber-700">· {c.sds_state === 'MISSING' ? 'thiếu SDS' : c.sds_state === 'EXPIRED' ? 'SDS quá hạn' : 'SDS chưa XN'}</span>}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Chọn vật tư (kho mỏ) HOẶC hóa chất – dùng cho đề nghị mua / đơn đặt hàng */
+export function TargetPicker({ kind, onKind, item, chemical, onItem, onChemical, disabled }: { kind: 'item' | 'chemical'; onKind: (k: 'item' | 'chemical') => void; item: PickedItem | null; chemical: PickedChemical | null; onItem: (i: PickedItem | null) => void; onChemical: (c: PickedChemical | null) => void; disabled?: boolean }) {
+  return (
+    <div className="flex items-start gap-1">
+      <select className="input w-28 shrink-0" value={kind} disabled={disabled} onChange={(e) => { onKind(e.target.value as 'item'); onItem(null); onChemical(null); }}>
+        <option value="item">Vật tư</option><option value="chemical">Hóa chất</option>
+      </select>
+      <div className="flex-1">{kind === 'item' ? <ItemPicker value={item} onPick={onItem} disabled={disabled} /> : <ChemicalPicker value={chemical} onPick={onChemical} disabled={disabled} />}</div>
+    </div>
+  );
+}
+
+export function GhsIcons({ codes }: { codes?: string[] }) {
+  if (!codes?.length) return null;
+  return <span className="inline-flex flex-wrap gap-1">{codes.map((c) => <span key={c} title={c} className="inline-flex h-6 w-6 rotate-45 items-center justify-center border-2 border-red-600 bg-white text-[8px] font-bold text-red-700"><span className="-rotate-45">{c.slice(3)}</span></span>)}</span>;
+}
